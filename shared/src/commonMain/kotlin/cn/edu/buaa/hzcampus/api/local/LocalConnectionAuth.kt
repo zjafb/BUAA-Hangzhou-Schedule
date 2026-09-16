@@ -48,6 +48,9 @@ import io.ktor.util.date.GMTDate
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.time.Instant
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
@@ -359,11 +362,14 @@ internal suspend fun resolveLocalBusinessAuthenticationFailure(
   }
 }
 
-private suspend fun reportLocalLoginSuccess(username: String, successMode: LoginStatsSuccessMode) {
+private fun reportLocalLoginSuccess(username: String, successMode: LoginStatsSuccessMode) {
   val connectionMode =
       ConnectionRuntime.currentMode()?.takeIf { it != ConnectionMode.SERVER_RELAY }
           ?: ConnectionMode.DIRECT
-  LoginStatsReporter.reportSuccess(username, successMode, connectionMode)
+  // 后台上报登录统计，不阻塞登录流程。
+  CoroutineScope(Dispatchers.IO).launch {
+    LoginStatsReporter.reportSuccess(username, successMode, connectionMode)
+  }
 }
 
 internal class LocalAuthServiceBackend : AuthServiceBackend {
