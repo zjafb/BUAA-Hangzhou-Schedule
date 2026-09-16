@@ -50,6 +50,7 @@ kotlin {
     androidMain.dependencies {
       implementation("org.jetbrains.compose.ui:ui-tooling-preview:$composeVersion")
       implementation(libs.androidx.activity.compose)
+      implementation("org.eclipse.angus:angus-mail:2.0.3")
     }
     commonMain.dependencies {
       implementation("org.jetbrains.compose.runtime:runtime:$composeVersion")

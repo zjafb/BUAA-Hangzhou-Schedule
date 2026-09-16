@@ -5,7 +5,6 @@ import cn.edu.buaa.hzcampus.api.core.ApiFactory
 import cn.edu.buaa.hzcampus.api.core.DefaultApiFactory
 import cn.edu.buaa.hzcampus.api.local.LocalAuthSessionStore
 import cn.edu.buaa.hzcampus.api.local.LocalCookieStore
-import cn.edu.buaa.hzcampus.api.local.LocalJudgeApiCache
 import cn.edu.buaa.hzcampus.api.local.LocalUpstreamClientProvider
 import cn.edu.buaa.hzcampus.api.storage.AuthTokensStore
 import cn.edu.buaa.hzcampus.api.storage.ClientIdStore
@@ -119,7 +118,6 @@ object ConnectionRuntime {
     ApiClientProvider.reset()
     DefaultApiFactory.clearCachedBackends()
     LocalUpstreamClientProvider.reset()
-    LocalJudgeApiCache.clearAll()
     GlobalTermRepository.instance.clear()
   }
 

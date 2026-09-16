@@ -1,6 +1,8 @@
 package cn.edu.buaa.hzcampus.ui.screens.menu
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,22 +13,27 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
-import androidx.compose.material.icons.filled.AssignmentTurnedIn
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -39,6 +46,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import cn.edu.buaa.hzcampus.model.dto.PlanTask
 import cn.edu.buaa.hzcampus.model.dto.TodayClass
 import cn.edu.buaa.hzcampus.ui.screens.grade.GradeScoreUpdateNotice
 import kotlin.time.Clock
@@ -58,11 +66,16 @@ internal fun HomeScreen(
     todoLoadingSources: List<HomeTodoSource>,
     todoFailedSources: List<HomeTodoSource>,
     scoreUpdateNotice: GradeScoreUpdateNotice?,
+    todayPlanTasks: List<PlanTask>,
+    mailUnreadCount: Int,
     onRetrySchedule: () -> Unit,
     onRefresh: () -> Unit,
     onOpenScoresClick: () -> Unit,
     onDismissScoreNotice: () -> Unit,
     onTodoClick: (HomeTodoItem) -> Unit,
+    onAddPlanClick: () -> Unit,
+    onPlanClick: (PlanTask) -> Unit,
+    onMailClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
   val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
@@ -91,6 +104,16 @@ internal fun HomeScreen(
             )
             if (isLoading && sortedClasses.isEmpty()) {
               HomeSectionLoadingChip(text = "加载中")
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            BadgedBox(
+                badge = {
+                  if (mailUnreadCount > 0) {
+                    Badge { Text(mailUnreadCount.toString()) }
+                  }
+                }
+            ) {
+              IconButton(onClick = onMailClick) { Icon(Icons.Default.Mail, "邮件") }
             }
           }
           Spacer(modifier = Modifier.height(4.dp))
@@ -125,6 +148,27 @@ internal fun HomeScreen(
         sortedClasses.isEmpty() && !isLoading ->
             item { HomeEmptyCard(title = "今天没有课程安排", subtitle = "今天可以安心处理其他事项。") }
         else -> items(sortedClasses) { todayClass -> TodayClassCard(todayClass = todayClass) }
+      }
+
+      item {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Text(
+              text = "今日计划",
+              style = MaterialTheme.typography.titleLarge,
+              fontWeight = FontWeight.Bold,
+          )
+          IconButton(onClick = onAddPlanClick) { Icon(Icons.Default.Add, "添加计划") }
+        }
+      }
+
+      if (todayPlanTasks.isEmpty()) {
+        item { HomeEmptyCard(title = "今天还没有计划", subtitle = "点击右上角 + 添加一条计划") }
+      } else {
+        items(todayPlanTasks) { task -> PlanCard(task = task, onClick = { onPlanClick(task) }) }
       }
 
       item {
@@ -506,7 +550,6 @@ private fun TodoChip(text: String, color: Color, contentColor: Color) {
 @Composable
 private fun sourceContainerColor(source: HomeTodoSource): Color =
     when (source) {
-      HomeTodoSource.SPOC -> MaterialTheme.colorScheme.tertiaryContainer
       HomeTodoSource.JUDGE -> MaterialTheme.colorScheme.primaryContainer
       HomeTodoSource.YGDK -> MaterialTheme.colorScheme.tertiaryContainer
     }
@@ -514,14 +557,60 @@ private fun sourceContainerColor(source: HomeTodoSource): Color =
 @Composable
 private fun sourceContentColor(source: HomeTodoSource): Color =
     when (source) {
-      HomeTodoSource.SPOC -> MaterialTheme.colorScheme.onTertiaryContainer
       HomeTodoSource.JUDGE -> MaterialTheme.colorScheme.onPrimaryContainer
       HomeTodoSource.YGDK -> MaterialTheme.colorScheme.onTertiaryContainer
     }
 
 private fun sourceIcon(source: HomeTodoSource): ImageVector =
     when (source) {
-      HomeTodoSource.SPOC -> Icons.Default.AssignmentTurnedIn
       HomeTodoSource.JUDGE -> Icons.Default.Code
       HomeTodoSource.YGDK -> Icons.AutoMirrored.Filled.DirectionsRun
     }
+
+@Composable
+private fun PlanCard(task: PlanTask, onClick: () -> Unit) {
+  Card(
+      modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+      elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+  ) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Box(
+          modifier =
+              Modifier.width(5.dp)
+                  .height(44.dp)
+                  .background(Color(task.color.toInt()), RoundedCornerShape(2.dp))
+      )
+      Spacer(modifier = Modifier.width(10.dp))
+      Column(modifier = Modifier.weight(1f)) {
+        Text(
+            text = task.title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        val time = listOfNotNull(task.startTime, task.endTime).joinToString(" - ")
+        if (time.isNotBlank()) {
+          Text(
+              text = time,
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+        if (task.note.isNotBlank()) {
+          Text(
+              text = task.note,
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+          )
+        }
+      }
+    }
+  }
+}

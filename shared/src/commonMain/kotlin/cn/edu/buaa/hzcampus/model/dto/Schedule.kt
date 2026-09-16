@@ -89,12 +89,11 @@ data class WeeklySchedule(
 
 @Serializable data class SectionTime(val section: Int, val start: String?, val end: String?)
 
-/** 优先用上游完整作息表；兼容尚未保存作息表的研究生标准方案旧缓存。 */
+/** 杭州校区固定 14 节：优先用上游作息表，缺失节次用标准 14 节表补全。 */
 fun scheduleSectionTimes(schedules: Collection<WeeklySchedule>): List<SectionTime> {
   val explicit = schedules.flatMap { it.sectionTimes }.distinct()
   val courses = schedules.flatMap { it.arrangedList }.distinct()
-  // YJSXK 的 01 节次方案（由校方 skjcList 核验），包含无课节次及第 14 节。
-  // 仅为学期代码及所有已知课程边界都匹配的旧缓存补全；不覆盖新导入的作息表。
+  // 杭州校区标准 14 节作息表
   val standard =
       listOf(
               "08:00" to "08:45",
@@ -113,39 +112,31 @@ fun scheduleSectionTimes(schedules: Collection<WeeklySchedule>): List<SectionTim
               "21:30" to "22:15",
           )
           .mapIndexed { index, (start, end) -> SectionTime(index + 1, start, end) }
-  val legacy =
-      if (
-          explicit.isEmpty() &&
-              schedules.isNotEmpty() &&
-              schedules.all { Regex("\\d{4}[12]").matches(it.code) } &&
-              courses.all {
-                (it.beginTime == null ||
-                    standard.getOrNull((it.beginSection ?: 0) - 1)?.start == it.beginTime) &&
-                    (it.endTime == null ||
-                        standard.getOrNull((it.endSection ?: 0) - 1)?.end == it.endTime)
-              }
-      )
-          standard
-      else emptyList()
-  val times = explicit.ifEmpty { legacy }
   val count =
       maxOf(
-          12,
-          times.maxOfOrNull { it.section } ?: 0,
+          14,
+          explicit.maxOfOrNull { it.section } ?: 0,
           courses.maxOfOrNull { it.endSection ?: 0 } ?: 0,
       )
   return (1..count).map { section ->
-    val known = times.filter { it.section == section }
+    val known = explicit.filter { it.section == section }
+    val std = standard.firstOrNull { it.section == section }
+    val startCandidates =
+        when {
+          known.isNotEmpty() -> known.mapNotNull { it.start }
+          std?.start != null -> listOf(std.start)
+          else -> courses.filter { it.beginSection == section }.mapNotNull { it.beginTime }
+        }
+    val endCandidates =
+        when {
+          known.isNotEmpty() -> known.mapNotNull { it.end }
+          std?.end != null -> listOf(std.end)
+          else -> courses.filter { it.endSection == section }.mapNotNull { it.endTime }
+        }
     SectionTime(
         section,
-        (if (known.isNotEmpty()) known.mapNotNull { it.start }
-            else courses.filter { it.beginSection == section }.mapNotNull { it.beginTime })
-            .distinct()
-            .singleOrNull(),
-        (if (known.isNotEmpty()) known.mapNotNull { it.end }
-            else courses.filter { it.endSection == section }.mapNotNull { it.endTime })
-            .distinct()
-            .singleOrNull(),
+        startCandidates.distinct().singleOrNull(),
+        endCandidates.distinct().singleOrNull(),
     )
   }
 }

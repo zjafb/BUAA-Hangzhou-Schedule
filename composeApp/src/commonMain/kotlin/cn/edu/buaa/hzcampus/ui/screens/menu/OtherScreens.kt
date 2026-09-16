@@ -117,7 +117,7 @@ fun AboutScreen(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = "• 课程表查询\n• 考试查询\n• 成绩查询\n• 空教室查询（杭州校区）\n• 希冀作业\n• SPOC 作业\n• 阳光打卡\n• 自动评教\n• 空间预约（跳转钉钉）",
+            text = "• 课程表查询\n• 考试查询\n• 成绩查询\n• 空教室查询（杭州校区）\n• 空间预约（跳转钉钉）\n• 邮件查询\n• 今日计划\n• 阳光打卡\n• 自动评教",
             style = MaterialTheme.typography.bodyMedium,
         )
 

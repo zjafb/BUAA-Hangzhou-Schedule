@@ -30,7 +30,7 @@ android {
   signingConfigs {
     create("release") {
       val keyPath = localProperties.getProperty("SIGNING_KEY") ?: System.getenv("SIGNING_KEY")
-      storeFile = keyPath?.let { file(it) }
+      storeFile = keyPath?.let { rootProject.file(it) }
       storePassword =
           localProperties.getProperty("SIGNING_STORE_PASSWORD")
               ?: System.getenv("SIGNING_STORE_PASSWORD")
@@ -52,6 +52,19 @@ android {
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21
+  }
+
+  packaging {
+    resources {
+      excludes +=
+          setOf(
+              "META-INF/NOTICE.md",
+              "META-INF/LICENSE.md",
+              "META-INF/LICENSE",
+              "META-INF/NOTICE",
+              "META-INF/DEPENDENCIES",
+          )
+    }
   }
 }
 

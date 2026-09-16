@@ -15,10 +15,8 @@ import cn.edu.buaa.hzcampus.api.feature.RelayEvaluationServiceBackend
 import cn.edu.buaa.hzcampus.api.feature.RelayGradeApiBackend
 import cn.edu.buaa.hzcampus.api.feature.RelayJudgeApiBackend
 import cn.edu.buaa.hzcampus.api.feature.RelayScheduleApiBackend
-import cn.edu.buaa.hzcampus.api.feature.RelaySpocApiBackend
 import cn.edu.buaa.hzcampus.api.feature.RelayYgdkApiBackend
 import cn.edu.buaa.hzcampus.api.feature.ScheduleApiBackend
-import cn.edu.buaa.hzcampus.api.feature.SpocApiBackend
 import cn.edu.buaa.hzcampus.api.feature.YgdkApiBackend
 import cn.edu.buaa.hzcampus.api.local.LocalAuthServiceBackend
 import cn.edu.buaa.hzcampus.api.local.LocalClassroomApiBackend
@@ -26,7 +24,6 @@ import cn.edu.buaa.hzcampus.api.local.LocalEvaluationServiceBackend
 import cn.edu.buaa.hzcampus.api.local.LocalGradeApiBackend
 import cn.edu.buaa.hzcampus.api.local.LocalJudgeApiBackend
 import cn.edu.buaa.hzcampus.api.local.LocalScheduleApiBackend
-import cn.edu.buaa.hzcampus.api.local.LocalSpocApiBackend
 import cn.edu.buaa.hzcampus.api.local.LocalUserServiceBackend
 import cn.edu.buaa.hzcampus.api.local.LocalYgdkApiBackend
 
@@ -37,10 +34,6 @@ interface ApiFactory {
 
   fun scheduleApi(): ScheduleApiBackend
 
-  fun spocApi(): SpocApiBackend
-
-  fun judgeApi(): JudgeApiBackend
-
   fun ygdkApi(): YgdkApiBackend
 
   fun classroomApi(): ClassroomApiBackend
@@ -48,6 +41,8 @@ interface ApiFactory {
   fun evaluationService(): EvaluationServiceBackend
 
   fun gradeApi(): GradeApiBackend
+
+  fun judgeApi(): JudgeApiBackend
 }
 
 internal object DefaultApiFactory : ApiFactory {
@@ -83,20 +78,6 @@ internal object DefaultApiFactory : ApiFactory {
         ConnectionMode.SERVER_RELAY -> RelayScheduleApiBackend()
       }
 
-  override fun spocApi(): SpocApiBackend =
-      when (mode()) {
-        ConnectionMode.DIRECT -> localBackends(ConnectionMode.DIRECT).spocApi
-        ConnectionMode.WEBVPN -> localBackends(ConnectionMode.WEBVPN).spocApi
-        ConnectionMode.SERVER_RELAY -> RelaySpocApiBackend()
-      }
-
-  override fun judgeApi(): JudgeApiBackend =
-      when (mode()) {
-        ConnectionMode.DIRECT -> localBackends(ConnectionMode.DIRECT).judgeApi
-        ConnectionMode.WEBVPN -> localBackends(ConnectionMode.WEBVPN).judgeApi
-        ConnectionMode.SERVER_RELAY -> RelayJudgeApiBackend()
-      }
-
   override fun ygdkApi(): YgdkApiBackend =
       when (mode()) {
         ConnectionMode.DIRECT -> localBackends(ConnectionMode.DIRECT).ygdkApi
@@ -125,6 +106,13 @@ internal object DefaultApiFactory : ApiFactory {
         ConnectionMode.SERVER_RELAY -> RelayGradeApiBackend()
       }
 
+  override fun judgeApi(): JudgeApiBackend =
+      when (mode()) {
+        ConnectionMode.DIRECT -> localBackends(ConnectionMode.DIRECT).judgeApi
+        ConnectionMode.WEBVPN -> localBackends(ConnectionMode.WEBVPN).judgeApi
+        ConnectionMode.SERVER_RELAY -> RelayJudgeApiBackend()
+      }
+
   private fun localBackends(mode: ConnectionMode): LocalBackendSet =
       when (mode) {
         ConnectionMode.DIRECT -> directBackends
@@ -136,19 +124,17 @@ internal object DefaultApiFactory : ApiFactory {
     val authService = LocalAuthServiceBackend()
     val userService = LocalUserServiceBackend()
     val scheduleApi = LocalScheduleApiBackend()
-    val spocApi = LocalSpocApiBackend()
-    val judgeApi = LocalJudgeApiBackend()
     val ygdkApi = LocalYgdkApiBackend()
     val classroomApi = LocalClassroomApiBackend()
     val evaluationService = LocalEvaluationServiceBackend()
     val gradeApi = LocalGradeApiBackend()
+    val judgeApi = LocalJudgeApiBackend()
 
     fun clearCache() {
-      spocApi.clearCache()
-      judgeApi.clearCache()
       ygdkApi.clearCache()
       classroomApi.clearCache()
       evaluationService.clearCache()
+      judgeApi.clearCache()
     }
   }
 }
@@ -160,10 +146,6 @@ internal object RelayApiFactory : ApiFactory {
 
   override fun scheduleApi(): ScheduleApiBackend = RelayScheduleApiBackend()
 
-  override fun spocApi(): SpocApiBackend = RelaySpocApiBackend()
-
-  override fun judgeApi(): JudgeApiBackend = RelayJudgeApiBackend()
-
   override fun ygdkApi(): YgdkApiBackend = RelayYgdkApiBackend()
 
   override fun classroomApi(): ClassroomApiBackend = RelayClassroomApiBackend()
@@ -171,4 +153,6 @@ internal object RelayApiFactory : ApiFactory {
   override fun evaluationService(): EvaluationServiceBackend = RelayEvaluationServiceBackend()
 
   override fun gradeApi(): GradeApiBackend = RelayGradeApiBackend()
+
+  override fun judgeApi(): JudgeApiBackend = RelayJudgeApiBackend()
 }

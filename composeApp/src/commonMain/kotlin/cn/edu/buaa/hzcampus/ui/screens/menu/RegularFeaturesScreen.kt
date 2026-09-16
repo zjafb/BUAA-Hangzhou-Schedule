@@ -7,11 +7,11 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
-import androidx.compose.material.icons.filled.AssignmentTurnedIn
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Grade
+import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.MeetingRoom
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -35,9 +35,9 @@ fun RegularFeaturesScreen(
     onExamClick: () -> Unit,
     onGradeClick: () -> Unit,
     onClassroomClick: () -> Unit,
-    onSpocClick: () -> Unit,
     onJudgeClick: () -> Unit,
     onSpaceReservationClick: () -> Unit,
+    onMailClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
   val features =
@@ -67,15 +67,9 @@ fun RegularFeaturesScreen(
               icon = Icons.Default.MeetingRoom,
           ),
           FeatureItem(
-              id = "spoc",
-              title = "SPOC作业",
-              description = "查看当前学期作业与提交状态",
-              icon = Icons.Default.AssignmentTurnedIn,
-          ),
-          FeatureItem(
               id = "judge",
               title = "希冀作业",
-              description = "聚合希冀平台作业与提交进度",
+              description = "查看希冀平台的编程作业与提交进度",
               icon = Icons.Default.Code,
           ),
           FeatureItem(
@@ -83,6 +77,12 @@ fun RegularFeaturesScreen(
               title = "空间预约",
               description = "跳转钉钉工作台空间预约管理平台",
               icon = Icons.Default.DateRange,
+          ),
+          FeatureItem(
+              id = "mail",
+              title = "邮件查询",
+              description = "绑定邮箱，收发与查询邮件",
+              icon = Icons.Default.MailOutline,
           ),
       )
 
@@ -101,9 +101,9 @@ fun RegularFeaturesScreen(
                 "exam" -> onExamClick()
                 "grade" -> onGradeClick()
                 "classroom" -> onClassroomClick()
-                "spoc" -> onSpocClick()
                 "judge" -> onJudgeClick()
                 "space" -> onSpaceReservationClick()
+                "mail" -> onMailClick()
               }
             },
         )

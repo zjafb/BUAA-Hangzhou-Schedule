@@ -3,6 +3,7 @@ package cn.edu.buaa.hzcampus.ui.screens.schedule
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -25,6 +26,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -41,8 +43,62 @@ import cn.edu.buaa.hzcampus.repository.ScheduleStore
 import cn.edu.buaa.hzcampus.ui.common.util.BackHandlerCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
+import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDate
 
 val LocalScheduleResponseExporter = staticCompositionLocalOf<((String) -> Unit)?> { null }
+
+/** 计划任务在课表网格中的定位：星期（1=周一）+ 起始节次 + 跨越节次数。 */
+internal data class PlanCell(
+    val dayOfWeek: Int,
+    val section: Int,
+    val span: Int,
+    val task: PlanTask,
+)
+
+/** 将计划任务映射到课表 (dayOfWeek, section, span)，span 依据 startTime~endTime 跨越的节次数计算。 */
+internal fun planTaskToCell(task: PlanTask, week: Week, times: List<SectionTime>): PlanCell? {
+  val date = runCatching { LocalDate.parse(task.date) }.getOrNull() ?: return null
+  val weekStart = runCatching { LocalDate.parse(week.startDate) }.getOrNull() ?: return null
+  val weekEnd = runCatching { LocalDate.parse(week.endDate) }.getOrNull() ?: return null
+  if (date < weekStart || date > weekEnd) return null
+  val dayOfWeek =
+      when (date.dayOfWeek) {
+        DayOfWeek.MONDAY -> 1
+        DayOfWeek.TUESDAY -> 2
+        DayOfWeek.WEDNESDAY -> 3
+        DayOfWeek.THURSDAY -> 4
+        DayOfWeek.FRIDAY -> 5
+        DayOfWeek.SATURDAY -> 6
+        DayOfWeek.SUNDAY -> 7
+      }
+  val taskStartTime = task.startTime ?: return null
+  val startSection =
+      times
+          .firstOrNull { st ->
+            val s = st.start
+            val e = st.end
+            s != null && e != null && s <= taskStartTime && taskStartTime < e
+          }
+          ?.section
+          ?: return null
+  val endTime = task.endTime
+  val endSection =
+      if (endTime == null) {
+        startSection
+      } else {
+        val last =
+            times
+                .lastOrNull { st ->
+                  val s = st.start
+                  s != null && s < endTime
+                }
+                ?.section
+        if (last == null) startSection else maxOf(startSection, last)
+      }
+  val span = endSection - startSection + 1
+  return PlanCell(dayOfWeek, startSection, span, task)
+}
 
 /** 不授予在线登录状态，断网或会话过期时仍可读取上次登录账号的本地课表。 */
 @Composable
@@ -152,7 +208,10 @@ fun ScheduleScreen(
     onWeekSelected: (Week) -> Unit,
     onNavigateBack: () -> Unit,
     onCourseClick: (CourseClass) -> Unit,
+    planTasks: List<PlanTask> = emptyList(),
+    onPlanClick: (PlanTask) -> Unit = {},
     modifier: Modifier = Modifier,
+    onEmptySlotClick: ((dayOfWeek: Int, section: Int) -> Unit)? = null,
     isUpdating: Boolean = false,
     updatedAt: String? = null,
     onUpdate: (() -> Unit)? = null,
@@ -287,6 +346,9 @@ fun ScheduleScreen(
                   },
                   onWeekSelected,
                   onCourseClick,
+                  onEmptySlotClick,
+                  planTasks,
+                  onPlanClick,
               )
             }
           }
@@ -327,6 +389,9 @@ internal fun ScheduleWeekPager(
     schedules: Map<Int, WeeklySchedule>,
     onWeekSelected: (Week) -> Unit,
     onCourseClick: (CourseClass) -> Unit,
+    onEmptySlotClick: ((Int, Int) -> Unit)? = null,
+    planTasks: List<PlanTask> = emptyList(),
+    onPlanClick: (PlanTask) -> Unit = {},
 ) {
   val index = weeks.indexOfFirst { it.serialNumber == selectedWeek.serialNumber }.coerceAtLeast(0)
   val pager = rememberPagerState(initialPage = index, pageCount = { weeks.size })
@@ -355,7 +420,15 @@ internal fun ScheduleWeekPager(
     val week = weeks[page]
     val schedule = schedules[week.serialNumber]
     if (schedule != null)
-        WeeklyScheduleView(schedule, week.headerDayLabels(), onCourseClick, times = times)
+        WeeklyScheduleView(
+            schedule,
+            week.headerDayLabels(),
+            onCourseClick,
+            times = times,
+            onEmptySlotClick = onEmptySlotClick,
+            planCells = planTasks.mapNotNull { planTaskToCell(it, week, times) },
+            onPlanClick = onPlanClick,
+        )
     else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("此周课表尚未加载") }
   }
 }
@@ -454,6 +527,9 @@ private fun WeeklyScheduleView(
     onCourseClick: (CourseClass) -> Unit,
     modifier: Modifier = Modifier,
     times: List<SectionTime> = scheduleSectionTimes(listOf(schedule)),
+    onEmptySlotClick: ((Int, Int) -> Unit)? = null,
+    planCells: List<PlanCell> = emptyList(),
+    onPlanClick: (PlanTask) -> Unit = {},
 ) {
   val totalPeriods = times.size
   val rowHeight: Dp = 64.dp
@@ -472,7 +548,16 @@ private fun WeeklyScheduleView(
                 )
     ) {
       TimeColumn(times, rowHeight, Modifier.width(52.dp))
-      WeeklyScheduleGrid(schedule, onCourseClick, totalPeriods, rowHeight, Modifier.weight(1f))
+      WeeklyScheduleGrid(
+          schedule,
+          onCourseClick,
+          totalPeriods,
+          rowHeight,
+          Modifier.weight(1f),
+          onEmptySlotClick,
+          planCells,
+          onPlanClick,
+      )
     }
   }
 }
@@ -541,6 +626,9 @@ private fun WeeklyScheduleGrid(
     totalPeriods: Int,
     rowHeight: Dp,
     modifier: Modifier = Modifier,
+    onEmptySlotClick: ((Int, Int) -> Unit)? = null,
+    planCells: List<PlanCell> = emptyList(),
+    onPlanClick: (PlanTask) -> Unit = {},
 ) {
   val totalDays = 7
   val gridColor = MaterialTheme.colorScheme.onSurface.copy(0.1f)
@@ -548,6 +636,7 @@ private fun WeeklyScheduleGrid(
     val density = LocalDensity.current
     val cellHeightPx = with(density) { rowHeight.toPx() }
     val cellWidth = maxWidth / totalDays
+    val cellWidthPx = with(density) { cellWidth.toPx() }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
       val pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
@@ -559,6 +648,26 @@ private fun WeeklyScheduleGrid(
         val x = i * cellWidth.toPx()
         drawLine(gridColor, Offset(x, 0f), Offset(x, size.height))
       }
+    }
+
+    if (onEmptySlotClick != null) {
+      Box(
+          modifier =
+              Modifier.fillMaxSize().pointerInput(schedule, cellWidthPx, cellHeightPx) {
+                detectTapGestures { offset ->
+                  val dayIndex = (offset.x / cellWidthPx).toInt().coerceIn(0, totalDays - 1)
+                  val sectionIdx = (offset.y / cellHeightPx).toInt().coerceIn(0, totalPeriods - 1)
+                  val occupied =
+                      schedule.arrangedList.any { course ->
+                        val cDay = (course.dayOfWeek ?: 1) - 1
+                        val cStart = (course.beginSection ?: 1) - 1
+                        val cEnd = (course.endSection ?: course.beginSection ?: 1) - 1
+                        dayIndex == cDay && sectionIdx in cStart..cEnd
+                      }
+                  if (!occupied) onEmptySlotClick.invoke(dayIndex + 1, sectionIdx + 1)
+                }
+              }
+      )
     }
 
     schedule.arrangedList.forEach { course ->
@@ -574,6 +683,47 @@ private fun WeeklyScheduleGrid(
                 .padding(1.dp),
         )
       }
+    }
+
+    planCells.forEach { cell ->
+      val dayIndex = cell.dayOfWeek - 1
+      val startIdx = cell.section - 1
+      if (dayIndex in 0 until totalDays && startIdx in 0 until totalPeriods) {
+        val span = cell.span.coerceIn(1, totalPeriods - startIdx)
+        PlanTaskCell(
+            cell,
+            { onPlanClick(cell.task) },
+            Modifier.offset(cellWidth * dayIndex, rowHeight * startIdx)
+                .size(cellWidth, rowHeight * span)
+                .padding(1.dp),
+        )
+      }
+    }
+  }
+}
+
+/** 计划任务单元格。 */
+@Composable
+private fun PlanTaskCell(cell: PlanCell, onClick: () -> Unit, modifier: Modifier = Modifier) {
+  val color = remember(cell.task.color) { Color(cell.task.color.toInt()) }
+  Card(
+      modifier = modifier.fillMaxSize().clickable { onClick() },
+      shape = RoundedCornerShape(6.dp),
+      colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.85f)),
+  ) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(3.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+      Text(
+          text = cell.task.title,
+          fontSize = 11.sp,
+          fontWeight = FontWeight.Medium,
+          textAlign = TextAlign.Center,
+          lineHeight = 13.sp,
+          maxLines = 3,
+          overflow = TextOverflow.Ellipsis,
+      )
     }
   }
 }

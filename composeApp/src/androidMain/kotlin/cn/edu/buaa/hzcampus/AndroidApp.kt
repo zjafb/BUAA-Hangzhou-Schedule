@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import cn.edu.buaa.hzcampus.repository.ScheduleStore
+import cn.edu.buaa.hzcampus.ui.common.util.AppContextHolder
 import cn.edu.buaa.hzcampus.ui.screens.schedule.LocalScheduleResponseExporter
 import cn.edu.buaa.hzcampus.widget.ScheduleWidgetProvider
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +18,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun AndroidApp() {
   val context = LocalContext.current
+  AppContextHolder.context = context.applicationContext
   val scope = rememberCoroutineScope()
   LaunchedEffect(Unit) {
     ScheduleStore.changes.collect { ScheduleWidgetProvider.requestRefresh(context) }

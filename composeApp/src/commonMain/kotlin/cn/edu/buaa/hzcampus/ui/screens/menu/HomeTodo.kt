@@ -2,8 +2,6 @@ package cn.edu.buaa.hzcampus.ui.screens.menu
 
 import cn.edu.buaa.hzcampus.model.dto.JudgeAssignmentSummaryDto
 import cn.edu.buaa.hzcampus.model.dto.JudgeSubmissionStatus
-import cn.edu.buaa.hzcampus.model.dto.SpocAssignmentSummaryDto
-import cn.edu.buaa.hzcampus.model.dto.SpocSubmissionStatus
 import cn.edu.buaa.hzcampus.model.dto.Week
 import cn.edu.buaa.hzcampus.model.dto.YgdkOverviewResponse
 import kotlinx.datetime.DatePeriod
@@ -14,14 +12,11 @@ import kotlinx.datetime.LocalTime
 import kotlinx.datetime.plus
 
 internal enum class HomeTodoSource(val label: String) {
-  SPOC("SPOC"),
   JUDGE("希冀"),
   YGDK("阳光打卡"),
 }
 
 internal sealed interface HomeTodoAction {
-  data class OpenSpocAssignment(val assignmentId: String) : HomeTodoAction
-
   data class OpenJudgeAssignment(val courseId: String, val assignmentId: String) : HomeTodoAction
 
   data object OpenYgdkHome : HomeTodoAction
@@ -42,7 +37,6 @@ internal data class HomeTodoItem(
 }
 
 internal fun buildHomeTodoItems(
-    spocAssignments: List<SpocAssignmentSummaryDto>,
     judgeAssignments: List<JudgeAssignmentSummaryDto>,
     ygdkOverview: YgdkOverviewResponse? = null,
     currentWeek: Week? = null,
@@ -52,7 +46,6 @@ internal fun buildHomeTodoItems(
     now: LocalDateTime,
 ): List<HomeTodoItem> {
   return buildList {
-        addAll(buildSpocTodoItems(spocAssignments, now))
         addAll(buildJudgeTodoItems(judgeAssignments, now))
         buildYgdkTodoItem(
                 overview = ygdkOverview,
@@ -90,42 +83,6 @@ internal fun formatHomeDateTime(value: LocalDateTime?): String =
     value?.let {
       "${it.month.ordinal + 1}月${it.day}日 ${it.hour.toPaddedString()}:${it.minute.toPaddedString()}"
     } ?: "时间待定"
-
-private fun buildSpocTodoItems(
-    assignments: List<SpocAssignmentSummaryDto>,
-    now: LocalDateTime,
-): List<HomeTodoItem> =
-    assignments.mapNotNull { assignment ->
-      val startTime = parseHomeDateTime(assignment.startTime)
-      val dueTime = parseHomeDateTime(assignment.dueTime)
-      if (
-          assignment.submissionStatus != SpocSubmissionStatus.UNSUBMITTED ||
-              startTime?.let { it > now } == true ||
-              dueTime == null ||
-              dueTime <= now
-      ) {
-        return@mapNotNull null
-      }
-
-      val subtitle =
-          listOfNotNull(
-                  assignment.courseName.takeIf { it.isNotBlank() },
-                  assignment.teacherName?.takeIf { it.isNotBlank() },
-              )
-              .joinToString(" · ")
-              .ifBlank { "SPOC 作业" }
-
-      HomeTodoItem(
-          id = "spoc:${assignment.assignmentId}",
-          source = HomeTodoSource.SPOC,
-          title = assignment.title,
-          subtitle = subtitle,
-          statusLabel = "待提交",
-          timeLabel = "截止 ${formatHomeDateTime(dueTime)}",
-          sortTime = dueTime,
-          action = HomeTodoAction.OpenSpocAssignment(assignment.assignmentId),
-      )
-    }
 
 private fun buildJudgeTodoItems(
     assignments: List<JudgeAssignmentSummaryDto>,

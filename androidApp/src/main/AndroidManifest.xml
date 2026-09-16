@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -25,6 +27,8 @@
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/schedule_upcoming_widget_info" />
         </receiver>
+        <receiver android:name="cn.edu.buaa.hzcampus.ui.common.util.ClassReminderReceiver" android:exported="false" />
+        <receiver android:name="cn.edu.buaa.hzcampus.ui.common.util.PlanReminderReceiver" android:exported="false" />
         <activity android:name="cn.edu.buaa.hzcampus.widget.ScheduleWidgetActivity" android:exported="false" />
         <activity
             android:exported="true"
