@@ -36,7 +36,7 @@ buildkonfig {
         "API_ENDPOINT",
         env.getProperty("API_ENDPOINT")
             ?: System.getenv("API_ENDPOINT")
-            ?: "https://ubaa.mofrp.top",
+            ?: "https://ubaa.mofrp.top:2021",
     )
   }
 }
