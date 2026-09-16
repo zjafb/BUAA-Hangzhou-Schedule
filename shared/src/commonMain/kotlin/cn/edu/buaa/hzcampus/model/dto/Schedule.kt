@@ -1,0 +1,181 @@
+package cn.edu.buaa.hzcampus.model.dto
+
+import kotlinx.serialization.Serializable
+
+/**
+ * 学期信息 DTO。
+ *
+ * @property itemCode 学期代码（如 "2024-2025-1"）。
+ * @property itemName 学期名称（如 "2024-2025学年第一学期"）。
+ * @property selected 是否为当前选中的学期。
+ * @property itemIndex 学期索引。
+ */
+@Serializable
+data class Term(
+    val itemCode: String,
+    val itemName: String,
+    val selected: Boolean,
+    val itemIndex: Int,
+)
+
+/**
+ * 周次信息 DTO。
+ *
+ * @property startDate 周开始日期（yyyy-MM-dd）。
+ * @property endDate 周结束日期（yyyy-MM-dd）。
+ * @property term 所属学期代码。
+ * @property curWeek 是否为当前周。
+ * @property serialNumber 周次序号。
+ * @property name 周次名称（如 "第1周"）。
+ */
+@Serializable
+data class Week(
+    val startDate: String,
+    val endDate: String,
+    val term: String,
+    val curWeek: Boolean,
+    val serialNumber: Int,
+    val name: String,
+)
+
+/**
+ * 课程班级/排课信息 DTO。
+ *
+ * @property courseCode 课程代码。
+ * @property courseName 课程名称。
+ * @property courseSerialNo 课程序列号。
+ * @property credit 学分。
+ * @property beginTime 开始时间（HH:mm）。
+ * @property endTime 结束时间（HH:mm）。
+ * @property beginSection 开始节次。
+ * @property endSection 结束节次。
+ * @property placeName 上课地点。
+ * @property weeksAndTeachers 上课周次与教师信息描述。
+ * @property teachingTarget 教学对象。
+ * @property color UI 显示颜色（十六进制）。
+ * @property dayOfWeek 星期几（1-7）。
+ */
+@Serializable
+data class CourseClass(
+    val courseCode: String,
+    val courseName: String,
+    val courseSerialNo: String?,
+    val credit: String?,
+    val beginTime: String?,
+    val endTime: String?,
+    val beginSection: Int?,
+    val endSection: Int?,
+    val placeName: String?,
+    val weeksAndTeachers: String?,
+    val teachingTarget: String?,
+    val color: String?,
+    val dayOfWeek: Int?,
+)
+
+/**
+ * 周课表信息 DTO。
+ *
+ * @property arrangedList 该周的所有排课列表。
+ * @property code 上游课表代码；本科接口返回学号，研究生适配填学期代码，不能用作统一学期标识。
+ * @property name 上游课表名称。
+ */
+@Serializable
+data class WeeklySchedule(
+    val arrangedList: List<CourseClass>,
+    val code: String,
+    val name: String,
+    val sectionTimes: List<SectionTime> = emptyList(),
+)
+
+@Serializable data class SectionTime(val section: Int, val start: String?, val end: String?)
+
+/** 优先用上游完整作息表；兼容尚未保存作息表的研究生标准方案旧缓存。 */
+fun scheduleSectionTimes(schedules: Collection<WeeklySchedule>): List<SectionTime> {
+  val explicit = schedules.flatMap { it.sectionTimes }.distinct()
+  val courses = schedules.flatMap { it.arrangedList }.distinct()
+  // YJSXK 的 01 节次方案（由校方 skjcList 核验），包含无课节次及第 14 节。
+  // 仅为学期代码及所有已知课程边界都匹配的旧缓存补全；不覆盖新导入的作息表。
+  val standard =
+      listOf(
+              "08:00" to "08:45",
+              "08:50" to "09:35",
+              "09:50" to "10:35",
+              "10:40" to "11:25",
+              "11:30" to "12:15",
+              "14:00" to "14:45",
+              "14:50" to "15:35",
+              "15:50" to "16:35",
+              "16:40" to "17:25",
+              "17:30" to "18:15",
+              "19:00" to "19:45",
+              "19:50" to "20:35",
+              "20:40" to "21:25",
+              "21:30" to "22:15",
+          )
+          .mapIndexed { index, (start, end) -> SectionTime(index + 1, start, end) }
+  val legacy =
+      if (
+          explicit.isEmpty() &&
+              schedules.isNotEmpty() &&
+              schedules.all { Regex("\\d{4}[12]").matches(it.code) } &&
+              courses.all {
+                (it.beginTime == null ||
+                    standard.getOrNull((it.beginSection ?: 0) - 1)?.start == it.beginTime) &&
+                    (it.endTime == null ||
+                        standard.getOrNull((it.endSection ?: 0) - 1)?.end == it.endTime)
+              }
+      )
+          standard
+      else emptyList()
+  val times = explicit.ifEmpty { legacy }
+  val count =
+      maxOf(
+          12,
+          times.maxOfOrNull { it.section } ?: 0,
+          courses.maxOfOrNull { it.endSection ?: 0 } ?: 0,
+      )
+  return (1..count).map { section ->
+    val known = times.filter { it.section == section }
+    SectionTime(
+        section,
+        (if (known.isNotEmpty()) known.mapNotNull { it.start }
+            else courses.filter { it.beginSection == section }.mapNotNull { it.beginTime })
+            .distinct()
+            .singleOrNull(),
+        (if (known.isNotEmpty()) known.mapNotNull { it.end }
+            else courses.filter { it.endSection == section }.mapNotNull { it.endTime })
+            .distinct()
+            .singleOrNull(),
+    )
+  }
+}
+
+/**
+ * 今日课程摘要 DTO。
+ *
+ * @property bizName 课程/业务名称。
+ * @property place 上课地点。
+ * @property time 上课时间描述。
+ * @property shortName 课程简称。
+ */
+@Serializable
+data class TodayClass(
+    val bizName: String,
+    val place: String?,
+    val time: String?,
+    val shortName: String?,
+)
+
+/** 上游 API 学期列表响应包装类。 */
+@Serializable data class TermResponse(val datas: List<Term>, val code: String, val msg: String?)
+
+/** 上游 API 周次列表响应包装类。 */
+@Serializable data class WeekResponse(val datas: List<Week>, val code: String, val msg: String?)
+
+/** 上游 API 周课表响应包装类。 */
+@Serializable
+data class WeeklyScheduleResponse(val datas: WeeklySchedule, val code: String, val msg: String?)
+
+/** 上游 API 今日课表响应包装类。 */
+@Serializable
+data class TodayScheduleResponse(val datas: List<TodayClass>, val code: String, val msg: String?)
