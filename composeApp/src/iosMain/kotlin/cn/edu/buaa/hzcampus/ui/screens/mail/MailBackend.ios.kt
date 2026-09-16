@@ -17,4 +17,6 @@ private object EmptyMailBackend : MailBackend {
   override suspend fun send(account: MailAccount, to: String, subject: String, body: String) {}
 
   override suspend fun fetchBody(account: MailAccount, uid: String): String = ""
+
+  override suspend fun countUnread(account: MailAccount): Int = 0
 }

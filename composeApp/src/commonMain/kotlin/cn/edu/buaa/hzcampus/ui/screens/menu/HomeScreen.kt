@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Info
@@ -551,20 +550,17 @@ private fun TodoChip(text: String, color: Color, contentColor: Color) {
 private fun sourceContainerColor(source: HomeTodoSource): Color =
     when (source) {
       HomeTodoSource.JUDGE -> MaterialTheme.colorScheme.primaryContainer
-      HomeTodoSource.YGDK -> MaterialTheme.colorScheme.tertiaryContainer
     }
 
 @Composable
 private fun sourceContentColor(source: HomeTodoSource): Color =
     when (source) {
       HomeTodoSource.JUDGE -> MaterialTheme.colorScheme.onPrimaryContainer
-      HomeTodoSource.YGDK -> MaterialTheme.colorScheme.onTertiaryContainer
     }
 
 private fun sourceIcon(source: HomeTodoSource): ImageVector =
     when (source) {
       HomeTodoSource.JUDGE -> Icons.Default.Code
-      HomeTodoSource.YGDK -> Icons.AutoMirrored.Filled.DirectionsRun
     }
 
 @Composable

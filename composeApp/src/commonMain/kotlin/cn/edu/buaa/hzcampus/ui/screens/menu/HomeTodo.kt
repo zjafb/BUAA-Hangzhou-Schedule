@@ -2,24 +2,16 @@ package cn.edu.buaa.hzcampus.ui.screens.menu
 
 import cn.edu.buaa.hzcampus.model.dto.JudgeAssignmentSummaryDto
 import cn.edu.buaa.hzcampus.model.dto.JudgeSubmissionStatus
-import cn.edu.buaa.hzcampus.model.dto.Week
-import cn.edu.buaa.hzcampus.model.dto.YgdkOverviewResponse
-import kotlinx.datetime.DatePeriod
-import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
-import kotlinx.datetime.plus
 
 internal enum class HomeTodoSource(val label: String) {
   JUDGE("希冀"),
-  YGDK("阳光打卡"),
 }
 
 internal sealed interface HomeTodoAction {
   data class OpenJudgeAssignment(val courseId: String, val assignmentId: String) : HomeTodoAction
-
-  data object OpenYgdkHome : HomeTodoAction
 }
 
 internal data class HomeTodoItem(
@@ -38,25 +30,9 @@ internal data class HomeTodoItem(
 
 internal fun buildHomeTodoItems(
     judgeAssignments: List<JudgeAssignmentSummaryDto>,
-    ygdkOverview: YgdkOverviewResponse? = null,
-    currentWeek: Week? = null,
-    ygdkReminderEnabled: Boolean = true,
-    ygdkWeekDone: Boolean = false,
-    ygdkTermDone: Boolean = false,
     now: LocalDateTime,
 ): List<HomeTodoItem> {
-  return buildList {
-        addAll(buildJudgeTodoItems(judgeAssignments, now))
-        buildYgdkTodoItem(
-                overview = ygdkOverview,
-                currentWeek = currentWeek,
-                reminderEnabled = ygdkReminderEnabled,
-                weekDone = ygdkWeekDone,
-                termDone = ygdkTermDone,
-                now = now,
-            )
-            ?.let(::add)
-      }
+  return buildJudgeTodoItems(judgeAssignments, now)
       .sortedWith(compareBy<HomeTodoItem> { it.sortTime == null }.thenBy { it.sortTime })
 }
 
@@ -116,36 +92,6 @@ private fun buildJudgeTodoItems(
       )
     }
 
-internal fun buildYgdkTodoItem(
-    overview: YgdkOverviewResponse?,
-    currentWeek: Week?,
-    reminderEnabled: Boolean,
-    weekDone: Boolean,
-    termDone: Boolean,
-    now: LocalDateTime,
-): HomeTodoItem? {
-  if (!reminderEnabled || weekDone || termDone) return null
-  val week = currentWeek ?: return null
-  val weekNumber = week.serialNumber
-  if (weekNumber !in 11..14) return null
-  val summary = overview?.summary ?: return null
-  val weekCount = summary.weekCount ?: return null
-  val termCount = summary.termCount
-  if (weekCount >= 4 || termCount >= 16) return null
-
-  val dueTime = now.currentWeekSundayEnd()
-  return HomeTodoItem(
-      id = "ygdk:${week.term}:$weekNumber",
-      source = HomeTodoSource.YGDK,
-      title = "本周阳光打卡未达标",
-      subtitle = "本周已打卡 $weekCount / 4 次",
-      statusLabel = "待打卡",
-      timeLabel = "截止 ${formatHomeDateTime(dueTime)}",
-      sortTime = dueTime,
-      action = HomeTodoAction.OpenYgdkHome,
-  )
-}
-
 private fun parseClockTime(value: String): LocalTime? {
   val parts = value.split(":")
   if (parts.size !in 2..3) return null
@@ -154,22 +100,5 @@ private fun parseClockTime(value: String): LocalTime? {
   val second = parts.getOrNull(2)?.toIntOrNull() ?: 0
   return runCatching { LocalTime(hour, minute, second) }.getOrNull()
 }
-
-private fun LocalDateTime.currentWeekSundayEnd(): LocalDateTime =
-    LocalDateTime(
-        date = date.plus(DatePeriod(days = date.daysUntilSunday())),
-        time = LocalTime(hour = 23, minute = 59, second = 59),
-    )
-
-private fun LocalDate.daysUntilSunday(): Int =
-    when (dayOfWeek) {
-      DayOfWeek.MONDAY -> 6
-      DayOfWeek.TUESDAY -> 5
-      DayOfWeek.WEDNESDAY -> 4
-      DayOfWeek.THURSDAY -> 3
-      DayOfWeek.FRIDAY -> 2
-      DayOfWeek.SATURDAY -> 1
-      DayOfWeek.SUNDAY -> 0
-    }
 
 private fun Int.toPaddedString(): String = toString().padStart(2, '0')

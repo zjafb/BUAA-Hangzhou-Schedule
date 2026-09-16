@@ -49,7 +49,7 @@ class ApiClient(private val engine: HttpClientEngine? = null) {
       }
 
       // 配置请求/响应日志
-      install(Logging) { level = LogLevel.INFO }
+      install(Logging) { level = LogLevel.NONE }
 
       // 配置 Bearer 认证
       install(Auth) {
@@ -86,9 +86,9 @@ class ApiClient(private val engine: HttpClientEngine? = null) {
 
       // 配置超时时间
       install(HttpTimeout) {
-        requestTimeoutMillis = 30_000
-        connectTimeoutMillis = 10_000
-        socketTimeoutMillis = 30_000
+        requestTimeoutMillis = 15_000
+        connectTimeoutMillis = 8_000
+        socketTimeoutMillis = 15_000
       }
 
       // 设置默认基准 URL

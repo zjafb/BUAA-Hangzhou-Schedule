@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AssignmentTurnedIn
 import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -40,12 +39,6 @@ internal data class AdvancedFeatureItem(
 internal fun advancedFeatureItems(): List<AdvancedFeatureItem> =
     listOf(
         AdvancedFeatureItem(
-            id = "ygdk",
-            title = "阳光打卡",
-            description = "查看记录并提交体育活动打卡",
-            icon = Icons.Default.WbSunny,
-        ),
-        AdvancedFeatureItem(
             id = "evaluation",
             title = "自动评教",
             description = "一键完成学期末评教任务",
@@ -62,7 +55,6 @@ internal fun advancedFeatureItems(): List<AdvancedFeatureItem> =
 @Composable
 fun AdvancedFeaturesScreen(
     onEvaluationClick: () -> Unit,
-    onYgdkClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
   val features = advancedFeatureItems()
@@ -78,7 +70,6 @@ fun AdvancedFeaturesScreen(
             feature = feature,
             onClick = {
               when (feature.id) {
-                "ygdk" -> onYgdkClick()
                 "evaluation" -> onEvaluationClick()
               }
             },

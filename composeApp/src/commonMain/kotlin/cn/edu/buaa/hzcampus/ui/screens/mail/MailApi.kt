@@ -17,6 +17,9 @@ interface MailBackend {
 
   /** 拉取指定邮件的完整纯文本正文。 */
   suspend fun fetchBody(account: MailAccount, uid: String): String
+
+  /** 只统计未读邮件数（轻量，不拉取正文）。 */
+  suspend fun countUnread(account: MailAccount): Int
 }
 
 expect fun createMailBackend(): MailBackend

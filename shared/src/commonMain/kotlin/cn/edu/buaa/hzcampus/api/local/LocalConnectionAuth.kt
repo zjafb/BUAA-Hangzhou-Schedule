@@ -285,12 +285,12 @@ private fun buildLocalUpstreamClient(
           }
       )
     }
-    install(Logging) { level = LogLevel.INFO }
+    install(Logging) { level = LogLevel.NONE }
     install(HttpCookies) { storage = cookieStorage }
     install(HttpTimeout) {
-      requestTimeoutMillis = 30_000
-      connectTimeoutMillis = 10_000
-      socketTimeoutMillis = 30_000
+      requestTimeoutMillis = 15_000
+      connectTimeoutMillis = 8_000
+      socketTimeoutMillis = 15_000
     }
   }
 }
@@ -367,6 +367,9 @@ private suspend fun reportLocalLoginSuccess(username: String, successMode: Login
 }
 
 internal class LocalAuthServiceBackend : AuthServiceBackend {
+  /** preload 阶段缓存的 SSO 登录页，供 login 复用，避免重复 GET。 */
+  private var cachedLoginPageHtml: String? = null
+
   override fun hasPersistedSession(): Boolean = LocalAuthSessionStore.get() != null
 
   override fun applyStoredSession() = Unit
@@ -405,6 +408,7 @@ internal class LocalAuthServiceBackend : AuthServiceBackend {
       }
 
       val loginPageHtml = response.bodyAsText()
+      cachedLoginPageHtml = loginPageHtml
       val execution = LocalCasParser.extractExecution(loginPageHtml).takeIf { it.isNotBlank() }
       val captchaInfo = LocalCasParser.detectCaptcha(loginPageHtml, captchaUrl())
       val hydratedCaptcha =
@@ -432,18 +436,23 @@ internal class LocalAuthServiceBackend : AuthServiceBackend {
   ): Result<LoginResponse> {
     val noRedirectClient = LocalUpstreamClientProvider.newNoRedirectClient()
     return try {
-      val loginPageResponse = noRedirectClient.get(loginUrl())
-      if (
-          loginPageResponse.status != HttpStatusCode.OK &&
-              loginPageResponse.status.value !in 300..399
-      ) {
-        return Result.failure(ApiCallException("登录失败，请稍后重试"))
+      // 复用 preload 缓存的登录页，跳过一次重复的 GET（preload 已请求过同一页面）
+      var loginPageHtml: String? = null
+      val cachedHtml = cachedLoginPageHtml
+      if (cachedHtml != null) {
+        loginPageHtml = cachedHtml
+      } else {
+        val loginPageResponse = noRedirectClient.get(loginUrl())
+        if (loginPageResponse.status.value in 300..399) {
+          activateUcLogin()
+        } else if (loginPageResponse.status == HttpStatusCode.OK) {
+          loginPageHtml = loginPageResponse.bodyAsText()
+        } else {
+          return Result.failure(ApiCallException("登录失败，请稍后重试"))
+        }
       }
 
-      if (loginPageResponse.status.value in 300..399) {
-        activateUcLogin()
-      } else {
-        val loginPageHtml = loginPageResponse.bodyAsText()
+      if (loginPageHtml != null) {
         LocalCasParser.extractTipText(loginPageHtml)?.let { tip ->
           return Result.failure(ApiCallException(tip))
         }
@@ -521,6 +530,7 @@ internal class LocalAuthServiceBackend : AuthServiceBackend {
     } catch (e: Exception) {
       Result.failure(e.toUserFacingApiException("登录失败，请稍后重试"))
     } finally {
+      cachedLoginPageHtml = null
       noRedirectClient.close()
     }
   }

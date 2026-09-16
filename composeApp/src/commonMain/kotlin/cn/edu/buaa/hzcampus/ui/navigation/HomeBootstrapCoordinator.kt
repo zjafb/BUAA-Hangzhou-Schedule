@@ -14,7 +14,6 @@ import kotlinx.coroutines.supervisorScope
 internal data class HomeBootstrapActions(
     val loadTodaySchedule: suspend (Boolean) -> Unit,
     val loadJudge: suspend (Boolean) -> Unit,
-    val loadYgdk: suspend (Boolean) -> Unit,
     val checkGradeScores: suspend (Boolean) -> Unit,
 )
 
@@ -39,7 +38,6 @@ internal class HomeBootstrapCoordinator(private val scope: CoroutineScope) {
               listOf(
                       launch { actions.loadTodaySchedule(forceRefresh) },
                       launch { actions.loadJudge(forceRefresh) },
-                      launch { actions.loadYgdk(forceRefresh) },
                       launch { actions.checkGradeScores(forceRefresh) },
                   )
                   .joinAll()

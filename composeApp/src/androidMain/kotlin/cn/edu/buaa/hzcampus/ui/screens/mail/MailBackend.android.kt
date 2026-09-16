@@ -37,6 +37,9 @@ private object AndroidMailBackend : MailBackend {
   override suspend fun connectAndList(account: MailAccount): List<MailMessage> =
       withImapFallback(account) { folder -> listMessages(folder) }
 
+  override suspend fun countUnread(account: MailAccount): Int =
+      withImapFallback(account) { folder -> folder.getUnreadMessageCount() }
+
   override suspend fun markRead(account: MailAccount, uid: String): Unit =
       withImapFallback(account) { folder -> setSeen(folder, uid, true) }
 
@@ -91,8 +94,8 @@ private object AndroidMailBackend : MailBackend {
     val props =
         Properties().apply {
           put("mail.store.protocol", protocol)
-          put("mail.$protocol.connectiontimeout", "15000")
-          put("mail.$protocol.timeout", "30000")
+          put("mail.$protocol.connectiontimeout", "10000")
+          put("mail.$protocol.timeout", "15000")
           if (ssl) {
             put("mail.imaps.ssl.enable", "true")
             put("mail.imaps.ssl.trust", "*")
@@ -131,8 +134,8 @@ private object AndroidMailBackend : MailBackend {
           put("mail.$protocol.host", account.smtpHost)
           put("mail.$protocol.port", account.smtpPort.toString())
           put("mail.$protocol.auth", "true")
-          put("mail.$protocol.connectiontimeout", "15000")
-          put("mail.$protocol.timeout", "30000")
+          put("mail.$protocol.connectiontimeout", "10000")
+          put("mail.$protocol.timeout", "15000")
           if (ssl) {
             put("mail.smtps.ssl.enable", "true")
             put("mail.smtps.ssl.trust", "*")
@@ -170,7 +173,7 @@ private object AndroidMailBackend : MailBackend {
                     ?: msg.from?.firstOrNull()?.toString().orEmpty(),
             date = msg.sentDate?.toString() ?: msg.receivedDate?.toString().orEmpty(),
             unread = !msg.flags.contains(Flags.Flag.SEEN),
-            bodyPreview = previewOf(msg),
+            bodyPreview = "",
         )
       }
 
@@ -268,13 +271,6 @@ private object AndroidMailBackend : MailBackend {
           .replace("&#39;", "'")
           .replace(Regex("\\n{3,}"), "\n\n")
           .trim()
-
-  private fun previewOf(msg: Message): String =
-      runCatching { extractBodyText(msg) }
-          .getOrDefault("")
-          .replace(Regex("\\s+"), " ")
-          .trim()
-          .take(200)
 
   // ---- 错误归类 ----
 

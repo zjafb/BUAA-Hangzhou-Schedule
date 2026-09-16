@@ -18,12 +18,13 @@ object CredentialStore {
 
   fun saveCredentials(username: String, password: String) {
     settings.putString(KEY_USERNAME, username)
-    settings.putString(KEY_PASSWORD, password)
+    settings.putString(KEY_PASSWORD, encryptSecret(password))
   }
 
   fun getUsername(): String? = settings.getStringOrNull(KEY_USERNAME)
 
-  fun getPassword(): String? = settings.getStringOrNull(KEY_PASSWORD)
+  fun getPassword(): String? =
+      settings.getStringOrNull(KEY_PASSWORD)?.let { decryptSecret(it).takeIf { s -> s.isNotBlank() } }
 
   fun setRememberPassword(enabled: Boolean) {
     settings.putBoolean(KEY_REMEMBER_PASSWORD, enabled)

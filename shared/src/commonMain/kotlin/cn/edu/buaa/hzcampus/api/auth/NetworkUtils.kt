@@ -59,8 +59,6 @@ internal fun userFacingMessageForCode(code: String?, status: HttpStatusCode): St
     "captcha_error" -> "验证码处理失败，请稍后重试"
     "missing_client_version" -> "缺少客户端版本信息"
     "unsupported_portal" -> "当前账号类型暂不支持该功能"
-    "ygdk_error" -> "阳光打卡服务暂时不可用，请稍后重试"
-    "ygdk_timeout" -> "阳光打卡服务响应超时，请稍后重试"
     "schedule_error" -> "课表查询失败，请稍后重试"
     "exam_error" -> "考试信息查询失败，请稍后重试"
     "grade_error" -> "成绩查询失败，请稍后重试"

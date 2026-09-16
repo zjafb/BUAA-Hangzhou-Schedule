@@ -58,10 +58,6 @@ import cn.edu.buaa.hzcampus.ui.screens.plan.PlanEditDialog
 import cn.edu.buaa.hzcampus.ui.screens.schedule.CourseDetailScreen
 import cn.edu.buaa.hzcampus.ui.screens.schedule.ScheduleScreen
 import cn.edu.buaa.hzcampus.ui.screens.schedule.ScheduleViewModel
-import cn.edu.buaa.hzcampus.ui.screens.ygdk.YgdkClockinFormScreen
-import cn.edu.buaa.hzcampus.ui.screens.ygdk.YgdkHomeScreen
-import cn.edu.buaa.hzcampus.ui.screens.ygdk.YgdkUiState
-import cn.edu.buaa.hzcampus.ui.screens.ygdk.YgdkViewModel
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlinx.coroutines.delay
@@ -87,8 +83,6 @@ enum class AppScreen {
   CLASSROOM_QUERY,
   MAIL,
   EVALUATION,
-  YGDK_HOME,
-  YGDK_FORM,
   JUDGE_ASSIGNMENTS,
   JUDGE_ASSIGNMENT_DETAIL,
 }
@@ -123,7 +117,6 @@ fun MainAppScreen(
   val navController = rememberNavigationController()
   val currentScreen = navController.currentScreen
   val openDingTalkSpaceReservation = rememberOpenDingTalkSpaceReservation()
-  val ygdkScreens = remember { setOf(AppScreen.YGDK_HOME, AppScreen.YGDK_FORM) }
 
   // 今日计划
   var planTasks by remember { mutableStateOf(PlanStore.list()) }
@@ -151,7 +144,7 @@ fun MainAppScreen(
         accounts.forEach { acc ->
           total +=
               try {
-                mailBackend.connectAndList(acc).count { it.unread }
+                mailBackend.countUnread(acc)
               } catch (e: Exception) {
                 0
               }
@@ -233,28 +226,9 @@ fun MainAppScreen(
       } else {
         null
       }
-  val ygdkViewModel: YgdkViewModel? =
-      if (currentScreen == AppScreen.HOME || currentScreen in ygdkScreens) {
-        viewModel(key = "ygdk-${userData.schoolid}") { YgdkViewModel(userKey = userData.schoolid) }
-      } else {
-        null
-      }
-  val ygdkUiState = ygdkViewModel?.uiState?.collectAsState()?.value ?: YgdkUiState()
   val judgeViewModel: JudgeViewModel =
       viewModel(key = "judge-${userData.schoolid}") { JudgeViewModel(userKey = userData.schoolid) }
   val judgeUiState by judgeViewModel.uiState.collectAsState()
-  val currentWeek = scheduleUiState.currentWeek
-  val ygdkWeekReminderKey = currentWeek?.let { "${it.term}:${it.serialNumber}" }
-  val ygdkTermReminderKey = currentWeek?.term ?: scheduleUiState.selectedTerm?.itemCode
-  val ygdkWeekDone = ygdkWeekReminderKey?.let { ygdkViewModel?.isHomeReminderWeekDone(it) } ?: false
-  val ygdkTermDone = ygdkTermReminderKey?.let { ygdkViewModel?.isHomeReminderTermDone(it) } ?: false
-  val isYgdkReminderWeek = currentWeek?.serialNumber?.let { it in 11..14 } == true
-  val shouldLoadYgdkHomeOverview =
-      ygdkViewModel != null &&
-          ygdkUiState.homeReminderEnabled &&
-          isYgdkReminderWeek &&
-          !ygdkWeekDone &&
-          !ygdkTermDone
 
   var selectedCourse by remember { mutableStateOf<CourseClass?>(null) }
   var judgeDetailKey by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -262,26 +236,15 @@ fun MainAppScreen(
   val homeTodoItems =
       remember(
           judgeUiState.assignmentsResponse?.assignments,
-          ygdkUiState.overview,
-          currentWeek,
-          ygdkUiState.homeReminderEnabled,
-          ygdkWeekDone,
-          ygdkTermDone,
           homeNow,
       ) {
         buildHomeTodoItems(
             judgeAssignments = judgeUiState.assignmentsResponse?.assignments.orEmpty(),
-            ygdkOverview = ygdkUiState.overview,
-            currentWeek = currentWeek,
-            ygdkReminderEnabled = ygdkUiState.homeReminderEnabled,
-            ygdkWeekDone = ygdkWeekDone,
-            ygdkTermDone = ygdkTermDone,
             now = homeNow,
         )
       }
   val homeTodoLoadingSources = buildList {
     if (judgeUiState.isLoading || judgeUiState.isRefreshing) add(HomeTodoSource.JUDGE)
-    if (shouldLoadYgdkHomeOverview && ygdkUiState.isLoading) add(HomeTodoSource.YGDK)
   }
   val homeTodoLoading = homeTodoLoadingSources.isNotEmpty()
   val homeContentLoading =
@@ -291,7 +254,6 @@ fun MainAppScreen(
           (homeManualRefreshStarted || homeBootstrapRunning || homeContentLoading)
   val homeTodoFailedSources = buildList {
     if (judgeUiState.error != null) add(HomeTodoSource.JUDGE)
-    if (shouldLoadYgdkHomeOverview && ygdkUiState.loadError != null) add(HomeTodoSource.YGDK)
   }
 
   fun startHomeBootstrap(forceRefresh: Boolean = false) {
@@ -300,7 +262,6 @@ fun MainAppScreen(
             !scheduleViewModel.hasTodayLoaded() ||
             !scheduleViewModel.hasCurrentWeekLoaded() ||
             !judgeViewModel.hasAssignmentsLoaded() ||
-            (shouldLoadYgdkHomeOverview && ygdkViewModel.hasOverviewLoaded() != true) ||
             !gradeScoreWatchViewModel.hasChecked()
     homeBootstrapCoordinator.restart(
         HomeBootstrapActions(
@@ -309,12 +270,6 @@ fun MainAppScreen(
             },
             loadJudge = { force ->
               judgeViewModel.ensureAssignmentsLoaded(forceRefresh = force)
-            },
-            loadYgdk = { force ->
-              scheduleViewModel.ensureCurrentWeekLoaded(forceRefresh = force)
-              if (shouldLoadYgdkHomeOverview) {
-                ygdkViewModel.ensureOverviewLoaded(forceRefresh = force)
-              }
             },
             checkGradeScores = { force ->
               gradeScoreWatchViewModel.checkForUpdates(forceRefresh = force)
@@ -354,9 +309,7 @@ fun MainAppScreen(
               AppScreen.JUDGE_ASSIGNMENTS,
               AppScreen.JUDGE_ASSIGNMENT_DETAIL -> BottomNavTab.REGULAR
               AppScreen.ADVANCED,
-              AppScreen.EVALUATION,
-              AppScreen.YGDK_HOME,
-              AppScreen.YGDK_FORM -> BottomNavTab.ADVANCED
+              AppScreen.EVALUATION -> BottomNavTab.ADVANCED
               else -> null
             }
     tab?.let { selectedBottomTab = it }
@@ -380,9 +333,7 @@ fun MainAppScreen(
             AppScreen.JUDGE_ASSIGNMENTS,
             AppScreen.JUDGE_ASSIGNMENT_DETAIL -> BottomNavTab.REGULAR
             AppScreen.ADVANCED,
-            AppScreen.EVALUATION,
-            AppScreen.YGDK_HOME,
-            AppScreen.YGDK_FORM -> BottomNavTab.ADVANCED
+            AppScreen.EVALUATION -> BottomNavTab.ADVANCED
             else -> null
           }
       tab?.let { selectedBottomTab = it }
@@ -408,40 +359,12 @@ fun MainAppScreen(
     when (val action = todoItem.action) {
       is HomeTodoAction.OpenJudgeAssignment ->
           openJudgeAssignment(action.courseId, action.assignmentId)
-      HomeTodoAction.OpenYgdkHome -> navigateTo(AppScreen.YGDK_HOME)
     }
   }
 
   fun openScoresFromHomeNotice() {
     gradeScoreWatchViewModel.consumeNotice()
     navigateTo(AppScreen.GRADE)
-  }
-
-  LaunchedEffect(
-      ygdkUiState.overview,
-      ygdkWeekReminderKey,
-      ygdkTermReminderKey,
-      ygdkUiState.homeReminderEnabled,
-  ) {
-    if (!ygdkUiState.homeReminderEnabled) return@LaunchedEffect
-    val viewModel = ygdkViewModel ?: return@LaunchedEffect
-    val summary = ygdkUiState.overview?.summary ?: return@LaunchedEffect
-    ygdkWeekReminderKey?.let { key ->
-      if ((summary.weekCount ?: 0) >= 4) {
-        viewModel.markHomeReminderWeekDone(key)
-      }
-    }
-    ygdkTermReminderKey?.let { key ->
-      if (summary.termCount >= 16) {
-        viewModel.markHomeReminderTermDone(key)
-      }
-    }
-  }
-
-  LaunchedEffect(currentScreen, currentWeek, shouldLoadYgdkHomeOverview) {
-    if (currentScreen == AppScreen.HOME && shouldLoadYgdkHomeOverview) {
-      ygdkViewModel.ensureOverviewLoaded()
-    }
   }
 
   LaunchedEffect(currentScreen) {
@@ -459,7 +382,6 @@ fun MainAppScreen(
     // 常驻 ViewModel
     scheduleViewModel.resetLoadedState()
     // 按需 ViewModel（当前可能为 null，仅在存活时重置）
-    ygdkViewModel?.resetLoadedState()
     examViewModel?.resetLoadedState()
     gradeViewModel?.resetLoadedState()
     gradeScoreWatchViewModel.resetLoadedState()
@@ -472,8 +394,6 @@ fun MainAppScreen(
       AppScreen.EXAM -> examViewModel?.ensureLoaded(forceRefresh = true)
       AppScreen.GRADE -> gradeViewModel?.ensureLoaded(forceRefresh = true)
       AppScreen.EVALUATION -> evaluationViewModel?.ensureLoaded(forceRefresh = true)
-      AppScreen.YGDK_HOME,
-      AppScreen.YGDK_FORM -> ygdkViewModel?.ensureLoaded(forceRefresh = true)
       AppScreen.JUDGE_ASSIGNMENTS,
       AppScreen.JUDGE_ASSIGNMENT_DETAIL -> judgeViewModel.ensureAssignmentsLoaded(forceRefresh = true)
       else -> Unit
@@ -507,8 +427,6 @@ fun MainAppScreen(
       AppScreen.EXAM -> examViewModel?.ensureLoaded()
       AppScreen.GRADE -> gradeViewModel?.ensureLoaded()
       AppScreen.EVALUATION -> evaluationViewModel?.ensureLoaded()
-      AppScreen.YGDK_HOME,
-      AppScreen.YGDK_FORM -> ygdkViewModel?.ensureLoaded()
       AppScreen.JUDGE_ASSIGNMENTS,
       AppScreen.JUDGE_ASSIGNMENT_DETAIL -> judgeViewModel.ensureAssignmentsLoaded()
       else -> Unit
@@ -530,8 +448,6 @@ fun MainAppScreen(
         AppScreen.CLASSROOM_QUERY -> "空教室查询"
         AppScreen.MAIL -> "邮件查询"
         AppScreen.EVALUATION -> "自动评教"
-        AppScreen.YGDK_HOME -> "阳光打卡"
-        AppScreen.YGDK_FORM -> "新增打卡"
         AppScreen.JUDGE_ASSIGNMENTS -> "希冀作业"
         AppScreen.JUDGE_ASSIGNMENT_DETAIL -> "作业详情"
       }
@@ -646,7 +562,6 @@ fun MainAppScreen(
           AppScreen.ADVANCED ->
               AdvancedFeaturesScreen(
                   onEvaluationClick = { navigateTo(AppScreen.EVALUATION) },
-                  onYgdkClick = { navigateTo(AppScreen.YGDK_HOME) },
               )
           AppScreen.MY -> MyScreen(userInfo = userInfo)
           AppScreen.SETTINGS ->
@@ -705,35 +620,6 @@ fun MainAppScreen(
               }
           AppScreen.MAIL -> MailScreen()
           AppScreen.EVALUATION -> evaluationViewModel?.let { EvaluationScreen(viewModel = it) }
-          AppScreen.YGDK_HOME ->
-              ygdkViewModel?.let {
-                YgdkHomeScreen(
-                    uiState = ygdkUiState,
-                    onRefresh = { it.refreshAll() },
-                    onLoadMore = { it.loadMoreRecords() },
-                    onAddClick = { navigateTo(AppScreen.YGDK_FORM) },
-                    onHomeReminderEnabledChange = { enabled -> it.setHomeReminderEnabled(enabled) },
-                    onMessageConsumed = { it.clearSubmitMessage() },
-                )
-              }
-          AppScreen.YGDK_FORM ->
-              ygdkViewModel?.let { viewModel ->
-                YgdkClockinFormScreen(
-                    uiState = ygdkUiState,
-                    imagePicker =
-                        cn.edu.buaa.hzcampus.ui.common.util.rememberPlatformImagePicker(
-                            onImagePicked = { viewModel.setPhoto(it) },
-                            onError = { viewModel.showMessage(it) },
-                        ),
-                    onItemSelected = { viewModel.updateItemId(it) },
-                    onStartTimeChange = { viewModel.updateStartTime(it) },
-                    onEndTimeChange = { viewModel.updateEndTime(it) },
-                    onPlaceChange = { viewModel.updatePlace(it) },
-                    onShareChange = { viewModel.setShareToSquare(it) },
-                    onClearPhoto = { viewModel.clearPhoto() },
-                    onSubmit = { viewModel.submitClockin { navigateBack() } },
-                )
-              }
           AppScreen.JUDGE_ASSIGNMENTS ->
               JudgeAssignmentsScreen(
                   viewModel = judgeViewModel,
@@ -766,8 +652,6 @@ fun MainAppScreen(
                   AppScreen.CLASSROOM_QUERY,
                   AppScreen.MAIL,
                   AppScreen.EVALUATION,
-                  AppScreen.YGDK_HOME,
-                  AppScreen.YGDK_FORM,
                   AppScreen.JUDGE_ASSIGNMENTS,
                   AppScreen.JUDGE_ASSIGNMENT_DETAIL,
               )
