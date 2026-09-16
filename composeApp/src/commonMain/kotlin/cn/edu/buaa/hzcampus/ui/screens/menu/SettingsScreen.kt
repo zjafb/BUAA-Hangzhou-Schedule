@@ -45,8 +45,9 @@ fun SettingsScreen(
   var advanceMinutes by remember { mutableStateOf(ReminderStore.getAdvanceMinutes()) }
   val presets = listOf(10, 15, 20, 30)
   var customEditing by remember { mutableStateOf(advanceMinutes !in presets) }
-  var customText by
-      remember { mutableStateOf(if (advanceMinutes !in presets) advanceMinutes.toString() else "") }
+  var customText by remember {
+    mutableStateOf(if (advanceMinutes !in presets) advanceMinutes.toString() else "")
+  }
 
   Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
     if (!areNotificationsEnabled()) {
@@ -110,10 +111,13 @@ fun SettingsScreen(
           onValueChange = { text ->
             val digits = text.filter { it.isDigit() }
             customText = digits
-            digits.toIntOrNull()?.takeIf { it in 1..240 }?.let {
-              advanceMinutes = it
-              ReminderStore.setAdvanceMinutes(it)
-            }
+            digits
+                .toIntOrNull()
+                ?.takeIf { it in 1..240 }
+                ?.let {
+                  advanceMinutes = it
+                  ReminderStore.setAdvanceMinutes(it)
+                }
           },
           label = { Text("自定义提前分钟数") },
           keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

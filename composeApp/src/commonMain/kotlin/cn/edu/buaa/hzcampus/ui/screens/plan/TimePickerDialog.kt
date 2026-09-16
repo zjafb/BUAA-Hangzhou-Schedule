@@ -42,11 +42,12 @@ fun TimePickerField(
         modifier = Modifier.fillMaxWidth(),
     )
     Box(
-        Modifier.matchParentSize()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) { onClick() },
+        Modifier.matchParentSize().clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+        ) {
+          onClick()
+        },
     )
   }
 }

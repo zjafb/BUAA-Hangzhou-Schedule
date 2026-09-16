@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -130,7 +129,11 @@ fun MailScreen(modifier: Modifier = Modifier) {
     ) {
       Box {
         TextButton(onClick = { showAccountMenu = true }) {
-          Text(selectedAccount?.name ?: selectedAccount?.email ?: "选择账号", maxLines = 1, overflow = TextOverflow.Ellipsis)
+          Text(
+              selectedAccount?.name ?: selectedAccount?.email ?: "选择账号",
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+          )
           Icon(Icons.Default.ArrowDropDown, null)
         }
         DropdownMenu(expanded = showAccountMenu, onDismissRequest = { showAccountMenu = false }) {
@@ -146,7 +149,12 @@ fun MailScreen(modifier: Modifier = Modifier) {
         }
       }
       Spacer(modifier = Modifier.weight(1f))
-      IconButton(onClick = { editingAccount = null; showAccountForm = true }) {
+      IconButton(
+          onClick = {
+            editingAccount = null
+            showAccountForm = true
+          }
+      ) {
         Icon(Icons.Default.Add, "添加账号")
       }
     }
@@ -175,7 +183,14 @@ fun MailScreen(modifier: Modifier = Modifier) {
           Icon(Icons.Default.Delete, null)
           Text("删除(${selectedUids.size})")
         }
-        TextButton(onClick = { selectionMode = false; selectedUids = emptySet() }) { Text("取消") }
+        TextButton(
+            onClick = {
+              selectionMode = false
+              selectedUids = emptySet()
+            }
+        ) {
+          Text("取消")
+        }
       } else {
         TextButton(onClick = { showCompose = true }) {
           Icon(Icons.AutoMirrored.Filled.Send, null)
@@ -195,9 +210,7 @@ fun MailScreen(modifier: Modifier = Modifier) {
           Icon(Icons.Default.DoneAll, null)
           Text("一键已读")
         }
-        IconButton(onClick = { selectionMode = true }) {
-          Icon(Icons.Default.Check, "多选")
-        }
+        IconButton(onClick = { selectionMode = true }) { Icon(Icons.Default.Check, "多选") }
         IconButton(onClick = { refresh() }, enabled = !loading) {
           Icon(Icons.Default.Refresh, "刷新")
         }
@@ -280,7 +293,9 @@ private fun MailMessageRow(
   Surface(
       modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
       shape = MaterialTheme.shapes.medium,
-      color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+      color =
+          if (selected) MaterialTheme.colorScheme.primaryContainer
+          else MaterialTheme.colorScheme.surfaceVariant,
   ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -290,10 +305,12 @@ private fun MailMessageRow(
         Checkbox(checked = selected, onCheckedChange = { onClick() })
       } else {
         Box(
-            modifier = Modifier.size(10.dp).background(
-                if (message.unread) Color(0xFFE53935) else Color(0xFF9E9E9E),
-                CircleShape,
-            )
+            modifier =
+                Modifier.size(10.dp)
+                    .background(
+                        if (message.unread) Color(0xFFE53935) else Color(0xFF9E9E9E),
+                        CircleShape,
+                    )
         )
       }
       Spacer(modifier = Modifier.width(10.dp))

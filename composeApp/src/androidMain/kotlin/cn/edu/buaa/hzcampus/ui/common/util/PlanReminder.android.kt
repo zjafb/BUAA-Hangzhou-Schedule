@@ -27,9 +27,7 @@ actual fun schedulePlanReminders(tasks: List<PlanTask>) {
       val remindAt = parsePlanReminderMillis(task.date, task.reminderAt) ?: return@forEachIndexed
       if (remindAt <= now) return@forEachIndexed
       val intent =
-          Intent(context, PlanReminderReceiver::class.java).apply {
-            putExtra("title", task.title)
-          }
+          Intent(context, PlanReminderReceiver::class.java).apply { putExtra("title", task.title) }
       val pi =
           PendingIntent.getBroadcast(
               context,
@@ -77,17 +75,17 @@ class PlanReminderReceiver : BroadcastReceiver() {
             .setContentText("今日计划提醒：$title")
             .setAutoCancel(true)
             .build()
-    NotificationManagerCompat.from(context).notify(
-        (System.currentTimeMillis() % 100000).toInt(),
-        notification,
-    )
+    NotificationManagerCompat.from(context)
+        .notify(
+            (System.currentTimeMillis() % 100000).toInt(),
+            notification,
+        )
   }
 }
 
 private fun createChannel(context: Context) {
   if (android.os.Build.VERSION.SDK_INT >= 26) {
-    val channel =
-        NotificationChannel(PLAN_CHANNEL_ID, "计划提醒", NotificationManager.IMPORTANCE_HIGH)
+    val channel = NotificationChannel(PLAN_CHANNEL_ID, "计划提醒", NotificationManager.IMPORTANCE_HIGH)
     context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
   }
 }

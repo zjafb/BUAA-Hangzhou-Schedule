@@ -33,10 +33,7 @@ import kotlin.math.abs
 private val WHEEL_HEIGHT = 180.dp
 private val ITEM_HEIGHT = 36.dp
 
-/**
- * 时分滚轮选择器：小时 0..23 与分钟 0..59 两列垂直滚动。
- * [value] 为空时展示默认值，滚动后即生成 HH:mm；点击「清除」恢复为空。
- */
+/** 时分滚轮选择器：小时 0..23 与分钟 0..59 两列垂直滚动。 [value] 为空时展示默认值，滚动后即生成 HH:mm；点击「清除」恢复为空。 */
 @Composable
 fun TimeWheelPicker(
     label: String,
@@ -46,12 +43,12 @@ fun TimeWheelPicker(
     defaultHour: Int = 8,
     defaultMinute: Int = 0,
 ) {
-  var hour by remember(value) {
-    mutableStateOf(value.substringBefore(":").toIntOrNull() ?: defaultHour)
-  }
-  var minute by remember(value) {
-    mutableStateOf(value.substringAfter(":", "").toIntOrNull() ?: defaultMinute)
-  }
+  var hour by
+      remember(value) { mutableStateOf(value.substringBefore(":").toIntOrNull() ?: defaultHour) }
+  var minute by
+      remember(value) {
+        mutableStateOf(value.substringAfter(":", "").toIntOrNull() ?: defaultMinute)
+      }
 
   fun emit() {
     onValueChange("${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}")
@@ -117,8 +114,7 @@ private fun WheelColumn(
   LaunchedEffect(listState, values.size) {
     snapshotFlow { listState.layoutInfo }
         .collect { layoutInfo ->
-          val viewportCenter =
-              layoutInfo.viewportStartOffset + layoutInfo.viewportSize.height / 2f
+          val viewportCenter = layoutInfo.viewportStartOffset + layoutInfo.viewportSize.height / 2f
           val centerItem =
               layoutInfo.visibleItemsInfo.minByOrNull {
                 abs(it.offset + it.size / 2f - viewportCenter)

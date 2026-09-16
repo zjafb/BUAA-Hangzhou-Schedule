@@ -219,15 +219,15 @@ private object AndroidMailBackend : MailBackend {
       type.startsWith("multipart/") -> {
         val multipart = runCatching { part.content as? Multipart }.getOrNull() ?: return
         for (i in 0 until multipart.count) {
-          runCatching { multipart.getBodyPart(i) }.getOrNull()?.let {
-            collectPartText(it, plain, html)
-          }
+          runCatching { multipart.getBodyPart(i) }
+              .getOrNull()
+              ?.let { collectPartText(it, plain, html) }
         }
       }
       type == "text/plain" -> partText(part)?.let { plain.append(it).append('\n') }
       type == "text/html" -> partText(part)?.let { html.append(it).append('\n') }
       type.isEmpty() -> partText(part)?.let { plain.append(it).append('\n') }
-      // 附件（image/*、application/* 等）跳过，不下载
+    // 附件（image/*、application/* 等）跳过，不下载
     }
   }
 
@@ -249,8 +249,7 @@ private object AndroidMailBackend : MailBackend {
     charsetName?.let { candidates.add(it) }
     candidates.addAll(listOf("UTF-8", "GB18030", "GBK", "GB2312", "ISO-8859-1"))
     for (name in candidates.distinct()) {
-      val decoded =
-          runCatching { String(bytes, charset(name)).removePrefix("\uFEFF") }.getOrNull()
+      val decoded = runCatching { String(bytes, charset(name)).removePrefix("\uFEFF") }.getOrNull()
       if (!decoded.isNullOrBlank()) return decoded
     }
     return ""

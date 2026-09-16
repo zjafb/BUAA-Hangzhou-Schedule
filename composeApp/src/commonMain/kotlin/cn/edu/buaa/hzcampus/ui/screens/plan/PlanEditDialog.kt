@@ -199,7 +199,10 @@ fun PlanEditDialog(
                         .then(
                             if (selected)
                                 Modifier.border(
-                                    2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                    2.dp,
+                                    MaterialTheme.colorScheme.primary,
+                                    CircleShape,
+                                )
                             else Modifier
                         )
                         .clickable { color = c },

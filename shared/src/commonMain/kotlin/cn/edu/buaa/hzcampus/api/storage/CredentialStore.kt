@@ -24,7 +24,9 @@ object CredentialStore {
   fun getUsername(): String? = settings.getStringOrNull(KEY_USERNAME)
 
   fun getPassword(): String? =
-      settings.getStringOrNull(KEY_PASSWORD)?.let { decryptSecret(it).takeIf { s -> s.isNotBlank() } }
+      settings.getStringOrNull(KEY_PASSWORD)?.let {
+        decryptSecret(it).takeIf { s -> s.isNotBlank() }
+      }
 
   fun setRememberPassword(enabled: Boolean) {
     settings.putBoolean(KEY_REMEMBER_PASSWORD, enabled)

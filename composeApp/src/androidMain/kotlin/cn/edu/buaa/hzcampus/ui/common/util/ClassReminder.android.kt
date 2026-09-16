@@ -74,13 +74,12 @@ class ClassReminderReceiver : BroadcastReceiver() {
     val title = intent.getStringExtra("title") ?: return
     val place = intent.getStringExtra("place")
     val advance = intent.getIntExtra("advance", 15)
-    val message =
-        buildString {
-          append("「").append(title).append("」还有 ").append(advance).append(" 分钟就要开始了")
-          if (!place.isNullOrBlank()) {
-            append("，请前往「").append(place).append("」")
-          }
-        }
+    val message = buildString {
+      append("「").append(title).append("」还有 ").append(advance).append(" 分钟就要开始了")
+      if (!place.isNullOrBlank()) {
+        append("，请前往「").append(place).append("」")
+      }
+    }
     val notification =
         NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -88,10 +87,11 @@ class ClassReminderReceiver : BroadcastReceiver() {
             .setContentText(message)
             .setAutoCancel(true)
             .build()
-    NotificationManagerCompat.from(context).notify(
-        (System.currentTimeMillis() % 100000).toInt(),
-        notification,
-    )
+    NotificationManagerCompat.from(context)
+        .notify(
+            (System.currentTimeMillis() % 100000).toInt(),
+            notification,
+        )
   }
 }
 

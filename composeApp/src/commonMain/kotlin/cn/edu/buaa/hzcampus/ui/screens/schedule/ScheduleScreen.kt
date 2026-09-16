@@ -80,8 +80,7 @@ internal fun planTaskToCell(task: PlanTask, week: Week, times: List<SectionTime>
             val e = st.end
             s != null && e != null && s <= taskStartTime && taskStartTime < e
           }
-          ?.section
-          ?: return null
+          ?.section ?: return null
   val endTime = task.endTime
   val endSection =
       if (endTime == null) {

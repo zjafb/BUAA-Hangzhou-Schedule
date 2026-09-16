@@ -34,8 +34,8 @@ import cn.edu.buaa.hzcampus.ui.screens.auth.ConnectionModeSelectionScreen
 import cn.edu.buaa.hzcampus.ui.screens.auth.LoginScreen
 import cn.edu.buaa.hzcampus.ui.screens.schedule.OfflineScheduleScreen
 import cn.edu.buaa.hzcampus.ui.screens.splash.SplashScreen
-import cn.edu.buaa.hzcampus.ui.theme.PreloadFonts
 import cn.edu.buaa.hzcampus.ui.theme.HzCampusTheme
+import cn.edu.buaa.hzcampus.ui.theme.PreloadFonts
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay

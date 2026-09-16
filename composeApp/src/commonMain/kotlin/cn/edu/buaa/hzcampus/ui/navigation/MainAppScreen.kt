@@ -4,7 +4,6 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -268,9 +267,7 @@ fun MainAppScreen(
             loadTodaySchedule = { force ->
               scheduleViewModel.ensureTodayLoaded(forceRefresh = force)
             },
-            loadJudge = { force ->
-              judgeViewModel.ensureAssignmentsLoaded(forceRefresh = force)
-            },
+            loadJudge = { force -> judgeViewModel.ensureAssignmentsLoaded(forceRefresh = force) },
             checkGradeScores = { force ->
               gradeScoreWatchViewModel.checkForUpdates(forceRefresh = force)
             },
@@ -395,7 +392,8 @@ fun MainAppScreen(
       AppScreen.GRADE -> gradeViewModel?.ensureLoaded(forceRefresh = true)
       AppScreen.EVALUATION -> evaluationViewModel?.ensureLoaded(forceRefresh = true)
       AppScreen.JUDGE_ASSIGNMENTS,
-      AppScreen.JUDGE_ASSIGNMENT_DETAIL -> judgeViewModel.ensureAssignmentsLoaded(forceRefresh = true)
+      AppScreen.JUDGE_ASSIGNMENT_DETAIL ->
+          judgeViewModel.ensureAssignmentsLoaded(forceRefresh = true)
       else -> Unit
     }
   }
@@ -538,7 +536,10 @@ fun MainAppScreen(
                   todoLoadingSources = homeTodoLoadingSources,
                   todoFailedSources = homeTodoFailedSources,
                   scoreUpdateNotice = gradeScoreWatchUiState.notice,
-                  todayPlanTasks = planTasks.filter { it.date == homeNow.date.toString() }.sortedBy { it.startTime ?: "23:59" },
+                  todayPlanTasks =
+                      planTasks
+                          .filter { it.date == homeNow.date.toString() }
+                          .sortedBy { it.startTime ?: "23:59" },
                   mailUnreadCount = mailUnread,
                   onRetrySchedule = { scheduleViewModel.loadTodaySchedule() },
                   onRefresh = { refreshHomeData() },
