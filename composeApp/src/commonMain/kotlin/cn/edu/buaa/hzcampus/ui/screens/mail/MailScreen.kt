@@ -26,6 +26,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -50,6 +52,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -484,6 +490,7 @@ private fun MailAccountFormDialog(
   var name by remember { mutableStateOf(existing?.name ?: "") }
   var email by remember { mutableStateOf(existing?.email ?: "") }
   var password by remember { mutableStateOf(existing?.password ?: "") }
+  var passwordVisible by remember { mutableStateOf(false) }
   var imapHost by remember { mutableStateOf(existing?.imapHost ?: "") }
   var imapPort by remember { mutableStateOf(existing?.imapPort?.toString() ?: "993") }
   var smtpHost by remember { mutableStateOf(existing?.smtpHost ?: "") }
@@ -531,6 +538,19 @@ private fun MailAccountFormDialog(
             onValueChange = { password = it },
             label = { Text("密码/授权码") },
             singleLine = true,
+            visualTransformation =
+                if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+              IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                Icon(
+                    imageVector =
+                        if (passwordVisible) Icons.Default.VisibilityOff
+                        else Icons.Default.Visibility,
+                    contentDescription = if (passwordVisible) "隐藏密码" else "显示密码",
+                )
+              }
+            },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth(),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

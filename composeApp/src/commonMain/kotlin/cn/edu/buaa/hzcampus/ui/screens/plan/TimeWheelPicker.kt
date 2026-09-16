@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -101,6 +102,7 @@ private fun WheelColumn(
       rememberLazyListState(initialFirstVisibleItemIndex = values.indexOf(value).coerceAtLeast(0))
   var selected by remember { mutableStateOf(value) }
   var lastEmitted by remember { mutableStateOf(value) }
+  val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
 
   // 外部值变化（如「下一节课下课」按钮）时滚动到对应项；自身滚动引发的回写不再重复滚动。
   LaunchedEffect(value) {
@@ -139,6 +141,7 @@ private fun WheelColumn(
     )
     LazyColumn(
         state = listState,
+        flingBehavior = flingBehavior,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = (WHEEL_HEIGHT - ITEM_HEIGHT) / 2),
         horizontalAlignment = Alignment.CenterHorizontally,
