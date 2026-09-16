@@ -76,11 +76,7 @@ fun App() {
     val uriHandler = LocalUriHandler.current
 
     suspend fun checkStartupPrompts() {
-      updateInfo = updateService.checkUpdate()
-      announcementInfo =
-          announcementService.checkAnnouncement()?.takeUnless {
-            AnnouncementReadStore.isRead(it.id)
-          }
+      // 北航杭州版不接入 UBAA 服务器的版本检查与公告，避免误报 UBAA 版本(1.8.0)和公告。
     }
 
     suspend fun bootstrapForMode(mode: ConnectionMode) {
