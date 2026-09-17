@@ -393,8 +393,7 @@ private fun HomeMetaChip(
 /**
  * 首页考试倒计时卡片。
  *
- * 只有存在「今天及以后」的最近一场考试时才会被调用（见 [findUpcomingExam]），
- * 因此这里不需要处理空数据或加载中状态；整卡可点，进入考试查询页。
+ * 只有存在「今天及以后」的最近一场考试时才会被调用（见 [findUpcomingExam]）， 因此这里不需要处理空数据或加载中状态；整卡可点，进入考试查询页。
  */
 @Composable
 private fun HomeExamCountdownCard(upcomingExam: HomeUpcomingExam, onClick: () -> Unit) {

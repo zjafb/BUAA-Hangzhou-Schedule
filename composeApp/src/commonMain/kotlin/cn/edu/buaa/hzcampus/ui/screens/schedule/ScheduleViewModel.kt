@@ -442,29 +442,22 @@ class ScheduleViewModel(
       return
     }
     val weeks =
-        repository
-            .weeks(term.itemCode)
-            .getOrElse {
-              showCalendarExportMessage(it.message ?: "读取本地课表失败，请先点击“课表本地化”")
-              return
-            }
+        repository.weeks(term.itemCode).getOrElse {
+          showCalendarExportMessage(it.message ?: "读取本地课表失败，请先点击“课表本地化”")
+          return
+        }
     val schedules =
-        repository
-            .schedules(term.itemCode)
-            .getOrElse {
-              showCalendarExportMessage(it.message ?: "读取本地课表失败，请先点击“课表本地化”")
-              return
-            }
-    _uiState.value =
-        _uiState.value.copy(isExportingCalendar = true, calendarExportMessage = null)
+        repository.schedules(term.itemCode).getOrElse {
+          showCalendarExportMessage(it.message ?: "读取本地课表失败，请先点击“课表本地化”")
+          return
+        }
+    _uiState.value = _uiState.value.copy(isExportingCalendar = true, calendarExportMessage = null)
     viewModelScope.launch {
       val result =
           runCatching {
                 buildScheduleCalendarExport(term.itemName, term.itemCode, weeks, schedules)
               }
-              .getOrElse {
-                ScheduleCalendarExport(false, "导出失败：${it.message ?: "未知错误"}")
-              }
+              .getOrElse { ScheduleCalendarExport(false, "导出失败：${it.message ?: "未知错误"}") }
       _uiState.value =
           _uiState.value.copy(
               isExportingCalendar = false,

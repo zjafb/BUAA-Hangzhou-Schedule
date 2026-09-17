@@ -8,8 +8,8 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
-import biweekly.ICalendar
 import biweekly.ICalVersion
+import biweekly.ICalendar
 import biweekly.component.VAlarm
 import biweekly.component.VEvent
 import biweekly.io.TimezoneAssignment
@@ -77,8 +77,7 @@ actual fun exportScheduleToCalendar(
     schedules: Map<Int, WeeklySchedule>,
 ): ScheduleCalendarExport {
   val context =
-      AppContextHolder.context
-          ?: return ScheduleCalendarExport(false, "导出失败：应用上下文未就绪，请重新打开应用后再试")
+      AppContextHolder.context ?: return ScheduleCalendarExport(false, "导出失败：应用上下文未就绪，请重新打开应用后再试")
   if (weeks.isEmpty() || schedules.isEmpty()) {
     return ScheduleCalendarExport(false, "请先本地化课表（课表页点击“课表本地化”）后再导出到系统日历")
   }
@@ -92,9 +91,7 @@ actual fun exportScheduleToCalendar(
       val fallbackNote = shareOrSave(context, file)
       ScheduleCalendarExport(
           success = true,
-          message =
-              fallbackNote
-                  ?: "已生成课表日历文件（${events.size} 个日程），请在分享面板中选择「日历」导入，或分享到微信/网盘",
+          message = fallbackNote ?: "已生成课表日历文件（${events.size} 个日程），请在分享面板中选择「日历」导入，或分享到微信/网盘",
           fileName = fileName,
           eventCount = events.size,
       )
@@ -105,8 +102,7 @@ actual fun exportScheduleToCalendar(
 }
 
 /**
- * 逐周生成日程：日期 = 该周周一 + (星期 - 1) 天，时间取课程自带的开始/结束时间，缺失时按节次作息表补全。
- * 周次可能不连续，逐周生成比 RRULE 更可靠；完全相同的一次课只保留一条。
+ * 逐周生成日程：日期 = 该周周一 + (星期 - 1) 天，时间取课程自带的开始/结束时间，缺失时按节次作息表补全。 周次可能不连续，逐周生成比 RRULE 更可靠；完全相同的一次课只保留一条。
  */
 private fun collectEvents(
     weeks: List<Week>,
@@ -144,7 +140,9 @@ private fun collectEvents(
               description = describe(course, times, week.serialNumber),
               uid = uniqueUid(termCode = termCode, key = key, used = usedUids),
               start = start,
-              end = if (end.after(start)) end else Date(start.time + DEFAULT_DURATION_MINUTES * 60_000L),
+              end =
+                  if (end.after(start)) end
+                  else Date(start.time + DEFAULT_DURATION_MINUTES * 60_000L),
           )
     }
   }
@@ -152,10 +150,18 @@ private fun collectEvents(
 }
 
 /** 开始/结束时间：优先课程自带时间，其次按节次作息表；都取不到时该课无法生成日程。 */
-private fun resolveTimes(course: CourseClass, sectionTimes: List<SectionTime>): Pair<String, String>? {
-  val beginSection = course.beginSection?.let { section -> sectionTimes.firstOrNull { it.section == section } }
-  val endSection = course.endSection?.let { section -> sectionTimes.firstOrNull { it.section == section } }
-  val begin = normalizeHourMinute(course.beginTime) ?: normalizeHourMinute(beginSection?.start) ?: return null
+private fun resolveTimes(
+    course: CourseClass,
+    sectionTimes: List<SectionTime>,
+): Pair<String, String>? {
+  val beginSection =
+      course.beginSection?.let { section -> sectionTimes.firstOrNull { it.section == section } }
+  val endSection =
+      course.endSection?.let { section -> sectionTimes.firstOrNull { it.section == section } }
+  val begin =
+      normalizeHourMinute(course.beginTime)
+          ?: normalizeHourMinute(beginSection?.start)
+          ?: return null
   val end = normalizeHourMinute(course.endTime) ?: normalizeHourMinute(endSection?.end)
   return begin to (end ?: shiftMinutes(begin, DEFAULT_DURATION_MINUTES))
 }
@@ -172,7 +178,11 @@ private fun normalizeHourMinute(raw: String?): String? {
 /** "HH:mm" 偏移若干分钟。 */
 private fun shiftMinutes(time: String, minutes: Int): String {
   val parts = time.split(":")
-  val total = ((parts[0].toIntOrNull() ?: 0) * 60 + (parts[1].toIntOrNull() ?: 0) + minutes).coerceIn(0, 24 * 60 - 1)
+  val total =
+      ((parts[0].toIntOrNull() ?: 0) * 60 + (parts[1].toIntOrNull() ?: 0) + minutes).coerceIn(
+          0,
+          24 * 60 - 1,
+      )
   return String.format(Locale.US, "%02d:%02d", total / 60, total % 60)
 }
 
@@ -269,12 +279,10 @@ private fun withShanghaiVTimezone(ics: String): String {
 /** 文件名：北航杭州课表-<学期>-<日期>.ics。 */
 private fun exportFileName(termName: String, termCode: String): String {
   val term =
-      (termName.ifBlank { termCode })
-          .replace(Regex("""[\\/:*?"<>|\s]+"""), "-")
-          .trim('-')
-          .ifEmpty { "学期" }
-  val date =
-      SimpleDateFormat("yyyyMMdd", Locale.US).apply { timeZone = SHANGHAI }.format(Date())
+      (termName.ifBlank { termCode }).replace(Regex("""[\\/:*?"<>|\s]+"""), "-").trim('-').ifEmpty {
+        "学期"
+      }
+  val date = SimpleDateFormat("yyyyMMdd", Locale.US).apply { timeZone = SHANGHAI }.format(Date())
   return "$EXPORT_FILE_PREFIX-$term-$date.ics"
 }
 
@@ -287,10 +295,7 @@ private fun writeIcsFile(context: Context, fileName: String, ics: String): File 
   return file
 }
 
-/**
- * 唤起系统分享面板（type=text/calendar，用户可选「日历」导入或分享到微信/网盘）。
- * 返回 null 表示已唤起；否则返回替代方案的说明（保存到下载目录）。
- */
+/** 唤起系统分享面板（type=text/calendar，用户可选「日历」导入或分享到微信/网盘）。 返回 null 表示已唤起；否则返回替代方案的说明（保存到下载目录）。 */
 private fun shareOrSave(context: Context, file: File): String? {
   val authority = "${context.packageName}.fileprovider"
   val uri = FileProvider.getUriForFile(context, authority, file)

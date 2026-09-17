@@ -70,8 +70,7 @@ fun examCountdownLabel(daysUntil: Int): String =
  *    当天一直显示「就是今天」，第二天自动跳到下一场；这比按考试结束时刻过滤更容易理解，也和首页日期口径一致。
  * 3. 多场候选按「日期升序 + 当天开始时间升序」取第一场；开始时间缺失的排在该天最后。
  *
- * 没有候选（考试还没加载、数据为空、全部考完、日期字段都不可用）时返回 null，
- * 调用方据此整块隐藏卡片，不会留下空白卡或一直转圈的占位。
+ * 没有候选（考试还没加载、数据为空、全部考完、日期字段都不可用）时返回 null， 调用方据此整块隐藏卡片，不会留下空白卡或一直转圈的占位。
  */
 fun findUpcomingExam(exams: List<Exam>, today: LocalDate): HomeUpcomingExam? =
     exams

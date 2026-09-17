@@ -27,8 +27,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
 /** 「北航中法未来科技学院（杭州）学习生活自助指南」静态站点。 */
-private const val CAMPUS_GUIDE_URL =
-    "https://noct-buaa.github.io/Self-Help-Guide-of-BIFAST-BUAA/"
+private const val CAMPUS_GUIDE_URL = "https://noct-buaa.github.io/Self-Help-Guide-of-BIFAST-BUAA/"
 
 /** 应用内 WebView 打开校园指南（纯静态站点，无需钉钉等外部容器）。 */
 @Composable
