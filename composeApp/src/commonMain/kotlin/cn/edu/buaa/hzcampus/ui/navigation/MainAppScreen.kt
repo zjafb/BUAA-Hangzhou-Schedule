@@ -760,9 +760,7 @@ fun MainAppScreen(
               Text("删除")
             }
           },
-          dismissButton = {
-            TextButton(onClick = { planDeleteCandidate = null }) { Text("取消") }
-          },
+          dismissButton = { TextButton(onClick = { planDeleteCandidate = null }) { Text("取消") } },
       )
     }
 
