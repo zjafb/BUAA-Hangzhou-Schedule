@@ -13,8 +13,8 @@ private const val SPACE_RESERVATION_URL = "https://hzsm.buaa.edu.cn/venue/portal
 /**
  * 打开「空间预约管理平台」：直接交给系统浏览器打开门户地址。
  *
- * 该门户依赖钉钉容器里的 JSAPI，在应用内 WebView 中打开只会白屏（已实测），因此这里不再做应用内嵌页面，
- * 统一用 `ACTION_VIEW` 跳出到浏览器；若设备已装钉钉并配置了链接处理，系统也会把它交给钉钉。
+ * 该门户依赖钉钉容器里的 JSAPI，在应用内 WebView 中打开只会白屏（已实测），因此这里不再做应用内嵌页面， 统一用 `ACTION_VIEW`
+ * 跳出到浏览器；若设备已装钉钉并配置了链接处理，系统也会把它交给钉钉。
  */
 @Composable
 actual fun rememberOpenDingTalkSpaceReservation(): () -> Unit {

@@ -80,8 +80,7 @@ private fun GradeScreenScaffold(
 /**
  * 高级功能「成绩查询」：只做统计与分析——GPA 概览、各学期 GPA / 分数分布图表、绩点模拟。
  *
- * 逐门课程的明细（成绩、学分、学时等）已拆到普通功能的 [CourseQueryScreen]；两个页面共用同一个 ViewModel，
- * 因此学期切换、下拉刷新与数据缓存完全一致。
+ * 逐门课程的明细（成绩、学分、学时等）已拆到普通功能的 [CourseQueryScreen]；两个页面共用同一个 ViewModel， 因此学期切换、下拉刷新与数据缓存完全一致。
  */
 @Composable
 fun GradeScreen(viewModel: GradeViewModel) {
