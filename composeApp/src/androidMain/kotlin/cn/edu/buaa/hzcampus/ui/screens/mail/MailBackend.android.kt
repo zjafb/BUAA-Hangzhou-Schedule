@@ -48,8 +48,11 @@ private object AndroidMailBackend : MailBackend {
         folder.messages.forEach { it.setFlag(Flags.Flag.SEEN, true) }
       }
 
-  override suspend fun delete(account: MailAccount, uid: String): Unit =
-      withImapFallback(account) { folder -> deleteByUid(folder, uid) }
+  override suspend fun delete(account: MailAccount, uid: String) {
+    // 先走完整的 SSL/明文回退链路，再在链路之外报告「未找到」，避免被当成连接失败重试。
+    val deleted = withImapFallback(account) { folder -> deleteByUid(folder, uid) }
+    if (!deleted) throw MailException("未找到该邮件（UID $uid），可能已被其他客户端删除")
+  }
 
   override suspend fun fetchBody(account: MailAccount, uid: String): String =
       withImapFallback(account) { folder -> bodyByUid(folder, uid) }
@@ -183,11 +186,21 @@ private object AndroidMailBackend : MailBackend {
         ?.setFlag(Flags.Flag.SEEN, seen)
   }
 
-  private fun deleteByUid(folder: Folder, uid: String) {
-    folder.messages
-        .firstOrNull { (folder as UIDFolder).getUID(it).toString() == uid }
-        ?.setFlag(Flags.Flag.DELETED, true)
+  /**
+   * 标记 \Deleted 后立即 expunge，把邮件真正从收件箱移除。
+   * 优先用 UID 直接定位，避免遍历整个文件夹；返回是否真的删除了邮件。
+   */
+  private fun deleteByUid(folder: Folder, uid: String): Boolean {
+    val uidFolder = folder as UIDFolder
+    val targetUid = uid.toLongOrNull()
+    val message =
+        targetUid?.let { runCatching { uidFolder.getMessageByUID(it) }.getOrNull() }
+            ?: folder.messages.firstOrNull { uidFolder.getUID(it).toString() == uid }
+            ?: return false
+    message.setFlag(Flags.Flag.DELETED, true)
+    // expunge 只清理本次会话中被标记删除的邮件。
     folder.expunge()
+    return true
   }
 
   private fun bodyByUid(folder: Folder, uid: String): String {

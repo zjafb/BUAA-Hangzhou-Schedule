@@ -154,10 +154,14 @@ fun MainAppScreen(
     }
   }
 
+  var reminderAdvanceMinutes by remember { mutableStateOf(ReminderStore.getAdvanceMinutes()) }
+
   LaunchedEffect(currentScreen) {
     if (currentScreen == AppScreen.HOME) {
       planTasks = PlanStore.list()
       refreshMailUnread()
+      // 从设置页返回时重新读取提前分钟数，保证修改立即生效。
+      reminderAdvanceMinutes = ReminderStore.getAdvanceMinutes()
     }
   }
 
@@ -181,9 +185,9 @@ fun MainAppScreen(
   val scheduleViewModel: ScheduleViewModel = viewModel { ScheduleViewModel() }
   val scheduleUiState by scheduleViewModel.uiState.collectAsState()
   val todayScheduleState by scheduleViewModel.todayScheduleState.collectAsState()
-  LaunchedEffect(todayScheduleState.todayClasses) {
+  LaunchedEffect(todayScheduleState.todayClasses, reminderAdvanceMinutes) {
     runCatching {
-      scheduleClassReminders(todayScheduleState.todayClasses, ReminderStore.getAdvanceMinutes())
+      scheduleClassReminders(todayScheduleState.todayClasses, reminderAdvanceMinutes)
     }
   }
   LaunchedEffect(homeNow.date) {
@@ -242,6 +246,8 @@ fun MainAppScreen(
             now = homeNow,
         )
       }
+  // 只有真正的首次加载/手动刷新才算 loading；后台补全详情（isEnrichingAssignments）不算，
+  // 否则待办区会因为「摘要之后仍在拉详情」一直转圈。
   val homeTodoLoadingSources = buildList {
     if (judgeUiState.isLoading || judgeUiState.isRefreshing) add(HomeTodoSource.JUDGE)
   }
@@ -535,6 +541,7 @@ fun MainAppScreen(
                   todoLoading = homeTodoLoading,
                   todoLoadingSources = homeTodoLoadingSources,
                   todoFailedSources = homeTodoFailedSources,
+                  todoEnriching = judgeUiState.isEnrichingAssignments,
                   scoreUpdateNotice = gradeScoreWatchUiState.notice,
                   todayPlanTasks =
                       planTasks
@@ -619,7 +626,7 @@ fun MainAppScreen(
               classroomViewModel?.let {
                 ClassroomQueryScreen(viewModel = it, onBackClick = { navigateBack() })
               }
-          AppScreen.MAIL -> MailScreen()
+          AppScreen.MAIL -> MailScreen(onMailChanged = { refreshMailUnread() })
           AppScreen.EVALUATION -> evaluationViewModel?.let { EvaluationScreen(viewModel = it) }
           AppScreen.JUDGE_ASSIGNMENTS ->
               JudgeAssignmentsScreen(

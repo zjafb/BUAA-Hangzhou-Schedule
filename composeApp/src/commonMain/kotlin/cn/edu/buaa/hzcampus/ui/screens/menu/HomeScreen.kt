@@ -64,6 +64,7 @@ internal fun HomeScreen(
     todoLoading: Boolean,
     todoLoadingSources: List<HomeTodoSource>,
     todoFailedSources: List<HomeTodoSource>,
+    todoEnriching: Boolean,
     scoreUpdateNotice: GradeScoreUpdateNotice?,
     todayPlanTasks: List<PlanTask>,
     mailUnreadCount: Int,
@@ -212,7 +213,14 @@ internal fun HomeScreen(
         }
       }
 
-      if (todoItems.isEmpty() && !todoLoading) {
+      if (todoItems.isEmpty() && !todoLoading && todoEnriching) {
+        item {
+          HomeLoadingCard(
+              title = "正在补全希冀作业详情",
+              subtitle = "作业摘要已同步，提交状态与截止时间稍后自动出现。",
+          )
+        }
+      } else if (todoItems.isEmpty() && !todoLoading) {
         item { HomeEmptyCard(title = "当前没有待办", subtitle = "近期事项都处理得很干净。") }
       } else if (todoItems.isEmpty()) {
         item {

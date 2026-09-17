@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -89,8 +90,23 @@ class JudgeViewModel(
               error = null,
           )
 
-      judgeApi
-          .getAssignments(includeExpired = includeExpired, userKey = userKey)
+      // 摘要阶段加了超时兜底：任何情况下都不能让待办区永远停在 loading。
+      val result =
+          withTimeoutOrNull(JUDGE_ASSIGNMENTS_TIMEOUT_MILLIS) {
+            judgeApi.getAssignments(includeExpired = includeExpired, userKey = userKey)
+          }
+      if (result == null) {
+        _uiState.value =
+            _uiState.value.copy(
+                isLoading = false,
+                isRefreshing = false,
+                isEnrichingAssignments = false,
+                error = "希冀作业同步超时，请下拉刷新或稍后重试",
+            )
+        return@launch
+      }
+
+      result
           .onSuccess { response ->
             val currentState = _uiState.value
             val shouldEnrichAssignments = response.assignments.any { it.needsDetailEnrichment() }
@@ -222,19 +238,22 @@ class JudgeViewModel(
 
     assignmentDetailEnrichmentJob =
         viewModelScope.launch {
-          summariesToEnrich.enrichDetailsInBatches(loadVersion)
-
-          if (loadVersion == assignmentLoadVersion) {
-            val currentState = _uiState.value
-            _uiState.value =
-                currentState.copy(
-                    isEnrichingAssignments = false,
-                    visibleAssignments =
-                        buildVisibleAssignments(
-                            currentState.assignmentsResponse?.assignments.orEmpty(),
-                            currentState,
-                        ),
-                )
+          try {
+            summariesToEnrich.enrichDetailsInBatches(loadVersion)
+          } finally {
+            // 无论成功、失败还是被新一次加载取消，都要结束「补全中」状态。
+            if (loadVersion == assignmentLoadVersion) {
+              val currentState = _uiState.value
+              _uiState.value =
+                  currentState.copy(
+                      isEnrichingAssignments = false,
+                      visibleAssignments =
+                          buildVisibleAssignments(
+                              currentState.assignmentsResponse?.assignments.orEmpty(),
+                              currentState,
+                          ),
+                  )
+            }
           }
         }
   }
@@ -369,9 +388,12 @@ class JudgeViewModel(
     return runCatching { LocalDateTime.parse(normalized) }.getOrNull()
   }
 
+  /**
+   * 摘要阶段的「未完成」判定：除已提交外都算未完成。
+   * 摘要在详情补全之前状态为 UNKNOWN，若把它排除会让列表和待办区先空一阵再突然出现。
+   */
   private fun JudgeAssignmentSummaryDto.isUnfinished(): Boolean =
-      submissionStatus == JudgeSubmissionStatus.UNSUBMITTED ||
-          submissionStatus == JudgeSubmissionStatus.PARTIAL
+      submissionStatus != JudgeSubmissionStatus.SUBMITTED
 
   private fun JudgeAssignmentSummaryDto.needsDetailEnrichment(): Boolean =
       startTime.isNullOrBlank() ||
@@ -399,5 +421,8 @@ class JudgeViewModel(
 
   companion object {
     private const val JUDGE_DETAIL_ENRICHMENT_BATCH_SIZE = 12
+
+    /** 摘要阶段超时上限，避免首页待办区因为网络问题无限期停在加载状态。 */
+    private const val JUDGE_ASSIGNMENTS_TIMEOUT_MILLIS = 45_000L
   }
 }

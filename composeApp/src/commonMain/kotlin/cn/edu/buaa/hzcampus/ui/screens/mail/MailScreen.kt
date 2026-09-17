@@ -1,7 +1,9 @@
 package cn.edu.buaa.hzcampus.ui.screens.mail
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,9 +68,16 @@ import kotlin.time.Clock
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** 邮件查询主界面：账号管理 + 收件箱列表 + 写邮件。 */
+/** 待确认的删除请求。 */
+private data class PendingMailDeletion(val uids: List<String>)
+
+/**
+ * 邮件查询主界面：账号管理 + 收件箱列表 + 写邮件。
+ *
+ * @param onMailChanged 邮件被删除或批量标记已读后回调，用于刷新首页未读数。
+ */
 @Composable
-fun MailScreen(modifier: Modifier = Modifier) {
+fun MailScreen(modifier: Modifier = Modifier, onMailChanged: () -> Unit = {}) {
   val backend = remember { createMailBackend() }
   val scope = rememberCoroutineScope()
   var accounts by remember { mutableStateOf(MailAccountsStore.list()) }
@@ -84,6 +93,9 @@ fun MailScreen(modifier: Modifier = Modifier) {
   var selectionMode by remember { mutableStateOf(false) }
   var selectedUids by remember { mutableStateOf<Set<String>>(emptySet()) }
   var showAccountMenu by remember { mutableStateOf(false) }
+  var pendingDeletion by remember { mutableStateOf<PendingMailDeletion?>(null) }
+  var deleteError by remember { mutableStateOf<String?>(null) }
+  var deleting by remember { mutableStateOf(false) }
 
   val selectedAccount = accounts.firstOrNull { it.id == selectedAccountId }
 
@@ -105,6 +117,30 @@ fun MailScreen(modifier: Modifier = Modifier) {
           .onSuccess { messages = it }
           .onFailure { error = it.message ?: "连接失败，请检查账号配置" }
       loading = false
+    }
+  }
+
+  /** 真正执行删除：先本地移除做即时反馈，再连服务器删除并刷新列表与未读数。 */
+  fun deleteMessages(uids: List<String>) {
+    val acc = selectedAccount
+    pendingDeletion = null
+    if (acc == null || uids.isEmpty() || deleting) return
+    selectionMode = false
+    selectedUids = emptySet()
+    selectedMessage = null
+    deleteError = null
+    messages = messages.filterNot { it.uid in uids }
+    scope.launch {
+      deleting = true
+      var failure: String? = null
+      uids.forEach { uid ->
+        runCatching { backend.delete(acc, uid) }
+            .onFailure { if (failure == null) failure = it.message ?: "删除失败" }
+      }
+      deleting = false
+      if (failure != null) deleteError = "删除失败：$failure"
+      refresh()
+      onMailChanged()
     }
   }
 
@@ -173,18 +209,9 @@ fun MailScreen(modifier: Modifier = Modifier) {
       if (selectionMode) {
         TextButton(onClick = { selectedUids = messages.map { it.uid }.toSet() }) { Text("全选") }
         TextButton(
-            onClick = {
-              val acc = selectedAccount
-              if (acc != null) {
-                scope.launch {
-                  selectedUids.forEach { uid -> runCatching { backend.delete(acc, uid) } }
-                  refresh()
-                }
-              }
-              selectionMode = false
-              selectedUids = emptySet()
-            },
-            enabled = selectedUids.isNotEmpty(),
+            // 先把选中的 UID 快照下来再启动协程，避免清空选择后删除落空。
+            onClick = { pendingDeletion = PendingMailDeletion(selectedUids.toList()) },
+            enabled = selectedUids.isNotEmpty() && !deleting,
         ) {
           Icon(Icons.Default.Delete, null)
           Text("删除(${selectedUids.size})")
@@ -209,6 +236,7 @@ fun MailScreen(modifier: Modifier = Modifier) {
                 scope.launch {
                   runCatching { backend.markAllRead(acc) }
                   refresh()
+                  onMailChanged()
                 }
               }
             },
@@ -216,11 +244,31 @@ fun MailScreen(modifier: Modifier = Modifier) {
           Icon(Icons.Default.DoneAll, null)
           Text("一键已读")
         }
-        IconButton(onClick = { selectionMode = true }) { Icon(Icons.Default.Check, "多选") }
-        IconButton(onClick = { refresh() }, enabled = !loading) {
+        IconButton(onClick = { selectionMode = true }, enabled = messages.isNotEmpty()) {
+          Icon(Icons.Default.Check, "多选（批量删除）")
+        }
+        IconButton(onClick = { refresh() }, enabled = !loading && !deleting) {
           Icon(Icons.Default.Refresh, "刷新")
         }
       }
+    }
+
+    // 删除能力提示与失败反馈
+    deleteError?.let {
+      Text(
+          text = it,
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.error,
+          modifier = Modifier.padding(bottom = 4.dp),
+      )
+    }
+    if (!selectionMode && messages.isNotEmpty()) {
+      Text(
+          text = "提示：长按邮件或用右上角「多选」可删除邮件；点开邮件后也能在详情里删除。",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.padding(bottom = 4.dp),
+      )
     }
 
     // 列表
@@ -259,6 +307,11 @@ fun MailScreen(modifier: Modifier = Modifier) {
                     selectedMessage = msg
                   }
                 },
+                onLongClick = {
+                  if (!deleting) {
+                    pendingDeletion = PendingMailDeletion(listOf(msg.uid))
+                  }
+                },
             )
           }
         }
@@ -275,8 +328,30 @@ fun MailScreen(modifier: Modifier = Modifier) {
           account = acc,
           backend = backend,
           onDismiss = { selectedMessage = null },
+          onDelete = {
+            selectedMessage = null
+            pendingDeletion = PendingMailDeletion(listOf(msg.uid))
+          },
       )
     }
+  }
+
+  // 删除确认
+  pendingDeletion?.let { pending ->
+    AlertDialog(
+        onDismissRequest = { pendingDeletion = null },
+        title = { Text("删除邮件") },
+        text = {
+          Text(
+              if (pending.uids.size == 1) "确定删除这封邮件吗？删除后将从服务器收件箱移除。"
+              else "确定删除选中的 ${pending.uids.size} 封邮件吗？删除后将从服务器收件箱移除。"
+          )
+        },
+        confirmButton = {
+          TextButton(onClick = { deleteMessages(pending.uids) }) { Text("删除") }
+        },
+        dismissButton = { TextButton(onClick = { pendingDeletion = null }) { Text("取消") } },
+    )
   }
 
   if (showCompose && selectedAccount != null) {
@@ -289,15 +364,19 @@ fun MailScreen(modifier: Modifier = Modifier) {
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MailMessageRow(
     message: MailMessage,
     selectionMode: Boolean,
     selected: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
   Surface(
-      modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+      modifier =
+          Modifier.fillMaxWidth()
+              .combinedClickable(onClick = onClick, onLongClick = onLongClick),
       shape = MaterialTheme.shapes.medium,
       color =
           if (selected) MaterialTheme.colorScheme.primaryContainer
@@ -361,6 +440,7 @@ private fun MessageDetailDialog(
     account: MailAccount,
     backend: MailBackend,
     onDismiss: () -> Unit,
+    onDelete: () -> Unit,
 ) {
   var body by remember { mutableStateOf<String?>(null) }
   var error by remember { mutableStateOf<String?>(null) }
@@ -405,7 +485,16 @@ private fun MessageDetailDialog(
           }
         }
       },
-      confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+      confirmButton = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          TextButton(onClick = onDelete) {
+            Icon(Icons.Default.Delete, null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("删除")
+          }
+          TextButton(onClick = onDismiss) { Text("关闭") }
+        }
+      },
   )
 }
 
