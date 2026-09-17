@@ -59,9 +59,13 @@ private enum class GpaSimulationMode {
 private const val MAX_ADJUSTABLE_COURSES = 40
 
 /**
- * GPA 概览卡片：加权 GPA、已修学分、课程数，以及按学期 / 全部学期的范围切换。
+ * GPA 概览卡片：加权 GPA、本学期课程数与总学分、其中计入 GPA 的门数与学分，以及按学期 / 全部学期的范围切换。
  *
- * 这里的 GPA 优先使用官方绩点，官方绩点缺失时才按常见换算规则估算，界面上会显式提示。
+ * 两组数字同时呈现：
+ * - 「课程数 / 总学分」是**全部有效课程**的口径（含未通过与两级制课程）；
+ * - 「计入 GPA 门数 / 学分」只统计真正参与加权 GPA 的课程（北航口径下未通过与两级制课程不计入 GPA）。
+ *
+ * 这里的 GPA 优先使用官方 `JD` 绩点，官方绩点缺失时才按北航官方换算公式估算，界面上会显式提示。
  */
 @Composable
 internal fun GpaOverviewCard(
@@ -113,14 +117,35 @@ internal fun GpaOverviewCard(
             modifier = Modifier.weight(1.2f),
         )
         GpaMetric(
-            label = "已修学分",
-            value =
-                if (summary.countedCredits > 0.0) formatNumber(summary.countedCredits) else "--",
+            label = "课程数",
+            value = summary.totalCourses.toString(),
             modifier = Modifier.weight(1f),
         )
         GpaMetric(
-            label = "课程数",
+            label = "总学分",
+            value = summary.totalCredits.takeIf { it > 0.0 }?.let(::formatNumber) ?: "--",
+            modifier = Modifier.weight(1f),
+        )
+      }
+
+      Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(16.dp),
+      ) {
+        GpaMetric(
+            label = "总学时",
+            value = summary.totalHours.takeIf { it > 0.0 }?.let(::formatNumber) ?: "--",
+            modifier = Modifier.weight(1f),
+        )
+        GpaMetric(
+            label = "计入 GPA 课程数",
             value = summary.countedCourses.toString(),
+            modifier = Modifier.weight(1f),
+        )
+        GpaMetric(
+            label = "计入 GPA 学分",
+            value =
+                if (summary.countedCredits > 0.0) formatNumber(summary.countedCredits) else "--",
             modifier = Modifier.weight(1f),
         )
       }
@@ -141,7 +166,24 @@ internal fun GpaOverviewCard(
         )
       }
 
+      if (summary.totalCourses > 0) {
+        val hoursText =
+            if (summary.totalHours > 0.0) " / ${formatNumber(summary.totalHours)} 学时" else ""
+        val countedHoursText =
+            if (summary.countedHours > 0.0) " / ${formatNumber(summary.countedHours)} 学时" else ""
+        Text(
+            text =
+                "全部：${summary.totalCourses} 门 / ${formatNumber(summary.totalCredits)} 学分$hoursText · " +
+                    "计入 GPA：${summary.countedCourses} 门 / ${formatNumber(summary.countedCredits)} 学分$countedHoursText",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+
       val notes = buildList {
+        if (summary.totalCourses > 0) {
+          add(GPA_TOTAL_SCOPE_NOTE)
+        }
         if (summary.hasEstimate) {
           add("$GPA_ESTIMATE_NOTE（${summary.estimatedCourses} 门缺少官方绩点）")
         }
@@ -150,6 +192,7 @@ internal fun GpaOverviewCard(
         }
         if (summary.countedCourses > 0) {
           add("GPA = Σ(绩点 × 学分) ÷ Σ学分")
+          add(GPA_FORMULA_NOTE)
         }
       }
       if (notes.isNotEmpty()) {
@@ -455,7 +498,7 @@ private fun AddCourseSimulation(
           if (simulation == null) {
             "请输入大于 0 的学分与 0-100 之间的分数"
           } else {
-            "按换算表 ${formatNumber(simulation.addedScore)} 分 → ${formatGradePoint(simulation.addedGradePoint)} 绩点；" +
+            "按北航官方公式 ${formatNumber(simulation.addedScore)} 分 → ${formatGradePoint(simulation.addedGradePoint)} 绩点；" +
                 "$GPA_RULE_NOTE"
           },
       style = MaterialTheme.typography.labelSmall,
@@ -536,7 +579,7 @@ private fun AdjustCoursesSimulation(
       if (counted.size > MAX_ADJUSTABLE_COURSES) {
         "仅列出前 $MAX_ADJUSTABLE_COURSES 门课程（共 ${counted.size} 门）；$GPA_RULE_NOTE"
       } else {
-        "调分后的绩点按常见换算表重新估算；$GPA_RULE_NOTE"
+        "调分后的绩点按北航官方公式重新估算；$GPA_RULE_NOTE"
       }
   Text(
       text = hint,

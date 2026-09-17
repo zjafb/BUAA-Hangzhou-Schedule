@@ -259,7 +259,7 @@ class LocalScheduleApiBackendTest {
               content =
                   ByteReadChannel(
                       """
-                      {"e":0,"m":"","d":{"1":{"kcmc":"高等数学","xf":"4.0","kccj":"95","fslx":"百分制","kclx":"必修"}}}
+                      {"e":0,"m":"","d":{"1":{"kcmc":"高等数学","xf":"4.0","xs":"64","kccj":"95","fslx":"百分制","kclx":"必修"}}}
                       """
                           .trimIndent()
                   ),
@@ -277,6 +277,7 @@ class LocalScheduleApiBackendTest {
     assertTrue(result.isSuccess)
     assertEquals("高等数学", result.getOrNull()?.grades?.singleOrNull()?.courseName)
     assertEquals("95", result.getOrNull()?.grades?.singleOrNull()?.score)
+    assertEquals(64.0, result.getOrNull()?.grades?.singleOrNull()?.hours)
     assertEquals(null, result.getOrNull()?.grades?.singleOrNull()?.gradePoint)
   }
 

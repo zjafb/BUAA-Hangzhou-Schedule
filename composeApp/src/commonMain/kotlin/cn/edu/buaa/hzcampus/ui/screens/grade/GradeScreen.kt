@@ -197,6 +197,7 @@ internal fun gradeDetailRows(grade: Grade): List<GradeDetailRow> =
     listOf(
             "课程号" to grade.courseCode,
             "学分" to grade.credit?.let(::formatNumber),
+            "学时" to grade.hours?.takeIf { it > 0.0 }?.let(::formatNumber),
             "课程属性" to grade.courseAttribute,
             "课程类别" to (grade.courseCategory ?: grade.courseGroup),
             "考试性质" to grade.examType,

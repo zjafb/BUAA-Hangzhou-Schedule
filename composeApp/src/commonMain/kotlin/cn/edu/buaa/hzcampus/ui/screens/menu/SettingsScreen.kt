@@ -20,6 +20,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,9 +30,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import cn.edu.buaa.hzcampus.api.ConnectionMode
 import cn.edu.buaa.hzcampus.api.storage.ReminderStore
 import cn.edu.buaa.hzcampus.ui.common.util.areNotificationsEnabled
+import cn.edu.buaa.hzcampus.ui.common.util.canScheduleExactAlarms
+import cn.edu.buaa.hzcampus.ui.common.util.openExactAlarmSettings
 import cn.edu.buaa.hzcampus.ui.common.util.openNotificationSettings
 
 @Composable
@@ -47,6 +53,19 @@ fun SettingsScreen(
   var customEditing by remember { mutableStateOf(advanceMinutes !in presets) }
   var customText by remember {
     mutableStateOf(if (advanceMinutes !in presets) advanceMinutes.toString() else "")
+  }
+
+  // 精确闹钟授权状态：从系统「闹钟和提醒」页返回时（前台恢复）重新读取一次。
+  var exactAlarmAllowed by remember { mutableStateOf(canScheduleExactAlarms()) }
+  val lifecycleOwner = LocalLifecycleOwner.current
+  DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event ->
+      if (event == Lifecycle.Event.ON_RESUME) {
+        exactAlarmAllowed = canScheduleExactAlarms()
+      }
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
   }
 
   Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
@@ -73,6 +92,36 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
           }
+        }
+      }
+      Spacer(modifier = Modifier.height(16.dp))
+    }
+    // Android 12+ 未授权精确闹钟时，课程提醒会被系统推迟（Doze/待机下可能几十分钟），
+    // 这里给出提示与一键跳转；已授权或系统版本低于 31 时不显示。
+    if (!exactAlarmAllowed) {
+      Card(
+          modifier = Modifier.fillMaxWidth(),
+          colors =
+              CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+      ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "精确提醒未开启",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "课程提醒需要「闹钟和提醒」权限才能准时送达，否则可能延迟。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+          TextButton(onClick = { openExactAlarmSettings() }) { Text("去授权") }
         }
       }
       Spacer(modifier = Modifier.height(16.dp))

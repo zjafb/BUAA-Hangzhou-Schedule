@@ -114,10 +114,13 @@ class AuthViewModel(
                   )
               _loginForm.value = _loginForm.value.copy(captcha = "")
             }
+            // 预加载结束即为确定结果：已登录进主页，未登录则需要人工输入，落到登录页。
+            markStartupAuthResolved()
           }
           .onFailure {
             _uiState.value =
                 _uiState.value.copy(isPreloading = false, error = "加载登录状态失败: ${it.message}")
+            markStartupAuthResolved()
           }
     }
   }
@@ -150,10 +153,12 @@ class AuthViewModel(
     val state = _uiState.value
     if (form.username.isBlank() || form.password.isBlank()) {
       _uiState.value = _uiState.value.copy(error = "用户名和密码不能为空")
+      markStartupAuthResolved()
       return
     }
     if (state.captchaRequired && form.captcha.isBlank()) {
       _uiState.value = _uiState.value.copy(error = "请输入验证码")
+      markStartupAuthResolved()
       return
     }
 
@@ -176,6 +181,7 @@ class AuthViewModel(
             CredentialStore.setAutoLogin(form.autoLogin)
             if (form.rememberPassword) CredentialStore.saveCredentials(form.username, form.password)
             if (!form.rememberPassword) _loginForm.value = LoginFormState()
+            markStartupAuthResolved()
           }
           .onFailure { exception ->
             if (exception is CaptchaRequiredClientException) {
@@ -190,9 +196,20 @@ class AuthViewModel(
               _uiState.value =
                   _uiState.value.copy(isLoading = false, error = exception.message ?: "登录失败")
             }
+            // 自动登录失败（密码错误 / 需要验证码 / 网络异常）：确定结果已给出，可以落到登录页。
+            markStartupAuthResolved()
           }
     }
   }
+
+  /**
+   * 启动时是否存在可自动恢复的登录：勾选了「自动登录」，或本地存有可恢复的持久会话。
+   *
+   * 判定分支与 [initializeApp] 保持一致，供启动界面决定是否需要保持加载态、直到认证给出确定结果。
+   */
+  fun hasRestorableSession(): Boolean =
+      CredentialStore.isAutoLogin() ||
+          runCatching { authService.hasPersistedSession() }.getOrDefault(false)
 
   /** 应用全局初始化入口。 用于检查本地 Token 是否有效，若失效则根据设置决定跳转登录页或尝试自动登录。 */
   fun initializeApp() {
@@ -200,6 +217,7 @@ class AuthViewModel(
     viewModelScope.launch {
       val restoredAccessToken = AuthTokensStore.get()?.accessToken?.takeIf { it.isNotBlank() }
       if (!authService.hasPersistedSession()) {
+        // 启动流程仍会继续（自动登录或预加载登录状态），由它们给出确定结果。
         if (CredentialStore.isAutoLogin()) login() else preloadLoginState()
         return@launch
       }
@@ -218,17 +236,27 @@ class AuthViewModel(
                     accessToken = restoredAccessToken,
                 )
             resetUserInfoState()
+            markStartupAuthResolved()
           }
           .onFailure { error ->
             _uiState.value = _uiState.value.copy(isLoading = false)
             if (error is ApiCallException && error.code == "auth_upstream_timeout") {
               _uiState.value = _uiState.value.copy(error = error.message)
+              markStartupAuthResolved()
               return@onFailure
             }
             authService.clearStoredSession()
+            // 注意：这里不结束启动流程，后面还会尝试自动登录/预加载登录状态，
+            // 由它们的终态（成功或失败）来结束，避免中途闪出登录页。
             if (CredentialStore.isAutoLogin()) login() else preloadLoginState()
           }
     }
+  }
+
+  /** 标记启动认证流程已经给出确定结果（成功登录、确定失败，或明确需要人工登录）。 */
+  private fun markStartupAuthResolved() {
+    if (_uiState.value.isStartupAuthResolved) return
+    _uiState.value = _uiState.value.copy(isStartupAuthResolved = true)
   }
 
   fun switchConnectionMode(mode: ConnectionMode) {
@@ -334,6 +362,13 @@ data class AuthUiState(
     val captchaRequired: Boolean = false,
     val captchaInfo: CaptchaInfo? = null,
     val execution: String? = null,
+    /**
+     * 启动认证流程是否已经给出确定结果（成功登录 / 确定失败 / 明确需要人工登录）。
+     *
+     * 默认 false，因此启动界面在"存在可自动恢复的登录"时可以安全地保持 Splash，
+     * 直到置位后才允许落到登录页，避免自动登录期间闪一下登录页。
+     */
+    val isStartupAuthResolved: Boolean = false,
 )
 
 /** 登录表单本地交互状态模型。 */

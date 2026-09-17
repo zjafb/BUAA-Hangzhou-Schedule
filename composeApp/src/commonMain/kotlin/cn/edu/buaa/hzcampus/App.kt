@@ -62,7 +62,8 @@ fun App() {
     val appScope = rememberCoroutineScope()
     val availableConnectionModes = remember { ConnectionRuntime.availableModes() }
     var selectedConnectionMode by remember { mutableStateOf<ConnectionMode?>(null) }
-    var modeResolved by remember { mutableStateOf(false) }
+    // 启动判定结果：null 表示尚未完成解析，此时必须停留在 Splash。
+    var startupDecision by remember { mutableStateOf<StartupDecision?>(null) }
     var showOfflineSchedule by remember { mutableStateOf(false) }
 
     // 启动流程控制状态
@@ -89,10 +90,21 @@ fun App() {
     }
 
     LaunchedEffect(Unit) {
-      selectedConnectionMode = ConnectionRuntime.resolveSelectedMode()
-      modeResolved = true
-      if (ScheduleStore.hasSavedSchedule()) isSplashFinished = true
-      selectedConnectionMode?.let { bootstrapForMode(it) }
+      val mode = ConnectionRuntime.resolveSelectedMode()
+      selectedConnectionMode = mode
+      // 启动瞬间同步判定"是否存在可自动恢复的登录"：勾选了自动登录，或本地存有可恢复的持久会话。
+      // 该判定必须与 AuthViewModel.initializeApp() 的分支保持一致，否则会出现
+      // "自动登录还没跑完就先结束 Splash → 闪一下登录页 → 再切回主页"。
+      val restoreExpected =
+          mode != null &&
+              runCatching { authViewModel.hasRestorableSession() }.getOrDefault(false)
+      // 没有自动恢复能力时保留快速路径：本地有课表就尽早结束 Splash，
+      // 让用户直接看到登录页与「查看离线课表」入口。
+      if (!restoreExpected && ScheduleStore.hasSavedSchedule()) isSplashFinished = true
+      // 先启动认证流程（它内部会立刻置位认证状态），再发布启动判定，
+      // 让"判定结果"与"认证进行中"在同一帧内一起生效，避免中间帧闪出登录页。
+      mode?.let { bootstrapForMode(it) }
+      startupDecision = StartupDecision(mode = mode, authRestoreExpected = restoreExpected)
     }
 
     // 前台恢复时验证会话有效性
@@ -119,28 +131,47 @@ fun App() {
       }
     }
 
-    // 根据认证状态和加载进度决定何时隐藏 Splash 界面
+    // 根据认证状态与启动判定决定何时隐藏 Splash 界面。
+    //
+    // 三种结果分别怎么走（仅在"存在可自动恢复的登录"时才会等待）：
+    //   1. 成功（isLoggedIn && userData != null）→ 结束 Splash，进入主页；
+    //   2. 确定失败 / 需要人工输入（密码错误、会话失效且未开启自动登录、需要验证码、
+    //      超时或断网导致的 error）→ 结束 Splash，落到登录页；
+    //   3. 仍在恢复登录中（isStartupAuthResolved == false）→ 保持 Splash，绝不中间闪登录页。
+    //
+    // 没有自动恢复能力时 authRestoreExpected 为 false，行为与旧版一致：尽快显示登录页。
     LaunchedEffect(
         uiState.isLoggedIn,
         uiState.error,
         uiState.isLoading,
         uiState.isPreloading,
         uiState.isRefreshingCaptcha,
+        uiState.isStartupAuthResolved,
+        startupDecision,
     ) {
+      val decision = startupDecision
+      val authBusy = uiState.isLoading || uiState.isPreloading || uiState.isRefreshingCaptcha
+      val restoreInFlight =
+          decision != null && decision.authRestoreExpected && !uiState.isStartupAuthResolved
       val shouldEndSplash =
           (uiState.isLoggedIn && uiState.userData != null) ||
-              (uiState.error != null &&
-                  !uiState.isLoading &&
-                  !uiState.isPreloading &&
-                  !uiState.isRefreshingCaptcha) ||
-              (!uiState.isLoading &&
-                  !uiState.isPreloading &&
-                  !uiState.isRefreshingCaptcha &&
+              (uiState.error != null && !authBusy) ||
+              (decision != null &&
+                  !restoreInFlight &&
+                  !authBusy &&
                   !uiState.isLoggedIn &&
-                  uiState.error == null &&
-                  !loginForm.autoLogin)
+                  uiState.error == null)
 
       if (shouldEndSplash) isSplashFinished = true
+    }
+
+    // 安全网：认证流程因任何异常原因始终没有给出确定结果时，也不会永久卡在 Splash。
+    // 取值明显大于认证客户端的超时（连接 8s / 请求 15s），正常流程不会走到这里。
+    LaunchedEffect(startupDecision) {
+      val decision = startupDecision ?: return@LaunchedEffect
+      if (!decision.authRestoreExpected) return@LaunchedEffect
+      delay(SPLASH_RESTORE_TIMEOUT_MS)
+      if (!isSplashFinished) isSplashFinished = true
     }
 
     // 版本更新对话框
@@ -208,7 +239,7 @@ fun App() {
 
     // 视图切换状态机
     when {
-      !modeResolved -> SplashScreen(modifier = Modifier.fillMaxSize())
+      startupDecision == null -> SplashScreen(modifier = Modifier.fillMaxSize())
       selectedConnectionMode == null ->
           ConnectionModeSelectionScreen(
               availableModes = availableConnectionModes,
@@ -283,6 +314,21 @@ internal fun launchStartupTasks(
   scope.launch { initializeAuthentication() }
   scope.launch { checkStartupPrompts() }
 }
+
+/** 等待自动登录/会话恢复给出确定结果的兜底时长，超过后强制结束 Splash。 */
+private const val SPLASH_RESTORE_TIMEOUT_MS = 30_000L
+
+/**
+ * 启动阶段的判定结果。
+ *
+ * @property mode 解析出的连接模式；为 null 表示需要用户先选择连接模式（此时不会等待认证）。
+ * @property authRestoreExpected 启动时是否存在可自动恢复的登录（勾选自动登录，或本地存有可恢复的持久会话）。
+ *   为 true 时必须保持 Splash 直到认证给出确定结果，避免先闪一下登录页再自动登录进去。
+ */
+internal data class StartupDecision(
+    val mode: ConnectionMode?,
+    val authRestoreExpected: Boolean,
+)
 
 internal fun shouldShowAnnouncementDialog(
     updateInfo: AppVersionCheckResponse?,

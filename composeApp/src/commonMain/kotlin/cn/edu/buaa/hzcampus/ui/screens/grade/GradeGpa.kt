@@ -10,18 +10,29 @@ import kotlin.math.round
  *
  * 这里不依赖任何 Compose 或平台 API，方便单元测试复用。
  *
- * ## 计算口径
- * 1. **绩点优先取官方值**：接口 `JD` 字段（[Grade.gradePoint]）是成绩单上学校给出的官方绩点，
- *    只要它能解析成数字就优先使用（[GradePointSource.OFFICIAL]）。
- * 2. **官方绩点缺失时按常见 4.0 制换算表估算**（[GradePointSource.ESTIMATED]，见
- *    [gradePointFromScore100]）。北航成绩单本身直接给出绩点，这里的分段表是按公开流传的 常见 4.0 制规则整理的，**不是官方文件**，只用于官方绩点缺失时的兜底。
+ * ## 计算口径（均按北航官方标准）
+ * 1. **绩点优先取官方值**：接口 `JD` / `jd` 字段（[Grade.gradePoint]）就是成绩单上学校给出的官方绩点，
+ *    只要它能解析成**大于 0** 的数字就优先使用（[GradePointSource.OFFICIAL]）。北航成绩单底部直接印出「学分绩点换算标准」，
+ *    因此官方 `JD` 永远优先于任何本地换算。写成 `0` 的占位值不算官方绩点（见 [parseOfficialGradePoint]）。
+ * 2. **官方绩点缺失时按北航官方换算标准估算**（[GradePointSource.ESTIMATED]，见 [gradePointFromScore100]）：
+ *     - **百分制**：`绩点 = 4 − 3 × (100 − X)² ÷ 1600`（X 为百分制分数）。这是一个**连续函数**，
+ *       不是分段表：60 分正好 1.0，100 分 4.0；`X < 60`（不及格）记 0（不及格本就不参与 GPA，
+ *       且公式在低分会给出负数）。
+ *     - **五级制**：优秀 4 / 良好 3.5 / 中等 2.8 / 及格 1.7 / 不及格 0（见 [LEVEL_GRADE_POINTS]）。
+ *     - **两级制**（通过 / 不通过）：**不计入 GPA，但计入总课程数与总学分**。
+ *     出处：北京航空航天大学成绩单底部的「学分绩点换算标准」，以及公开的北航 GPA 计算程序
+ *     （CSDN《北航GPA计算程序》）正文与其引用摘要，多个来源口径一致；界面提示见 [GPA_FORMULA_NOTE] /
+ *     [GPA_RULE_NOTE]，仍以学校官方成绩单为准。
  * 3. **加权 GPA = Σ(课程绩点 × 课程学分) / Σ课程学分**（北航官方 GPA 口径）。
  * 4. 只有同时满足下列条件的成绩条目才参与 GPA：
  *     - 学分存在且大于 0；
  *     - 未标记为未通过（`SFJG_DISPLAY` 为「否」，或成绩文本为「不及格 / 不通过 / 未通过 / 不合格」）；
  *     - 未标记为无效（`SFYX_DISPLAY` 为「否」，例如作弊、取消资格等记录）；
  *     - 能取到官方绩点，或者能按分数估算出绩点（「通过 / 合格」这类只有结论没有分数的课程会被忽略）。 被忽略的条目会被计数并在界面上提示，而不是静默丢弃。
- * 5. 加权平均分 / 算数平均分 / 分数分布使用「有百分制分数的课程」，包含未通过课程（这样 `<60` 分段才有意义），但不包含无效记录。等级制成绩按 优=90 / 良=80 / 中=70
+ * 5. **「全部」口径**（课程数 / 总学分 / 总学时，见 [GpaSummary.totalCourses] / [GpaSummary.totalCredits] /
+ *    [GpaSummary.totalHours]）：包含未通过课程与两级制（通过 / 不通过）课程，但不含成绩无效的记录。
+ *    总学时对应官网成绩页的「学时统计」，字段为接口的 `xs`；课程没给学时时不计入。
+ * 6. 加权平均分 / 算数平均分 / 分数分布使用「有百分制分数的课程」，包含未通过课程（这样 `<60` 分段才有意义），但不包含无效记录。等级制成绩按 优=90 / 良=80 / 中=70
  *    / 及格=60 折算， 「通过 / 不通过」不参与平均分。
  */
 
@@ -29,7 +40,7 @@ import kotlin.math.round
 internal enum class GradePointSource {
   /** 官方绩点，来自成绩单 `JD` 字段。 */
   OFFICIAL,
-  /** 官方绩点缺失，按常见换算规则估算。 */
+  /** 官方绩点缺失，按北航官方换算公式估算。 */
   ESTIMATED,
 }
 
@@ -45,21 +56,23 @@ internal enum class GpaSkipReason(val label: String) {
   NO_GRADE_POINT("无百分制成绩"),
 }
 
-/** 百分制分数 → 4.0 制绩点的常见换算表，按分段从高到低排列。 */
-internal val SCORE_TO_GRADE_POINT_TABLE: List<Pair<Double, Double>> =
-    listOf(
-        90.0 to 4.0,
-        85.0 to 3.7,
-        82.0 to 3.3,
-        78.0 to 3.0,
-        75.0 to 2.7,
-        72.0 to 2.3,
-        68.0 to 2.0,
-        64.0 to 1.5,
-        60.0 to 1.0,
-    )
+/**
+ * 北航官方百分制绩点换算公式的参数：`绩点 = 4 − 3 × (100 − X)² ÷ 1600`。
+ *
+ * 该公式是连续函数（不是分段表），来源见文件头注释。
+ */
+private const val GPA_FORMULA_MAX_POINT = 4.0
 
-/** 等级制成绩 → 绩点（仅在缺少官方绩点时使用）。 */
+private const val GPA_FORMULA_FACTOR = 3.0
+private const val GPA_FORMULA_DENOMINATOR = 1600.0
+
+/** 及格线：低于该分数的成绩记 0 绩点（不及格本就不参与 GPA）。 */
+private const val GPA_PASS_SCORE = 60.0
+
+/** 百分制满分，用于兜住脏数据（公式对 > 100 的分数会给出 > 4 的绩点）。 */
+private const val GPA_FULL_SCORE = 100.0
+
+/** 等级制成绩 → 绩点（仅在缺少官方绩点、且没有百分制分数时使用，与北航官方五级制一致）。 */
 private val LEVEL_GRADE_POINTS: Map<String, Double> =
     mapOf("优" to 4.0, "良" to 3.5, "中" to 2.8, "及格" to 1.7, "不及格" to 0.0)
 
@@ -74,10 +87,17 @@ private val PASS_ONLY_TEXTS: Set<String> = setOf("通过", "合格", "免修")
 private val FAILED_TEXTS: Set<String> = setOf("不及格", "不通过", "未通过", "不合格")
 
 /** 界面上关于估算口径的提示文案。 */
-internal const val GPA_ESTIMATE_NOTE = "部分课程绩点按常见规则估算"
+internal const val GPA_ESTIMATE_NOTE = "部分课程按北航官方公式估算绩点"
+
+/** 北航官方百分制绩点换算公式的界面说明（与成绩单底部「学分绩点换算标准」一致）。 */
+internal const val GPA_FORMULA_NOTE = "北航百分制绩点 = 4 − 3 × (100 − 分数)² ÷ 1600（60 分 1.0，100 分 4.0）"
 
 /** 界面上关于换算规则来源的提示文案。 */
-internal const val GPA_RULE_NOTE = "换算规则仅供参考，以学校官方成绩单为准"
+internal const val GPA_RULE_NOTE = "换算规则为北航官方学分绩点标准，最终以学校官方成绩单为准"
+
+/** 界面上关于「全部」口径（课程数 / 总学分）的提示文案。 */
+internal const val GPA_TOTAL_SCOPE_NOTE =
+    "课程数与总学分含未通过、两级制（通过 / 不通过）课程；两类课程均不计入 GPA"
 
 /** 去掉空白并统一等级写法，便于比较。 */
 internal fun normalizeScoreText(score: String?): String? {
@@ -93,13 +113,20 @@ internal fun normalizeScoreText(score: String?): String? {
   }
 }
 
-/** 百分制分数 → 4.0 制绩点。低于 60 分记 0 分绩点。 */
+/**
+ * 百分制分数 → 绩点，使用北航官方公式 `4 − 3 × (100 − X)² ÷ 1600`。
+ *
+ * 60 分正好 1.0，100 分 4.0；低于 60 分（不及格）记 0 分绩点——不及格课程本就不参与 GPA，
+ * 而且官方公式在低分区间会算出负数。返回值为未经四舍五入的精确值，四舍五入只发生在展示层。
+ */
 internal fun gradePointFromScore100(score: Double): Double {
   if (!score.isFinite()) return 0.0
-  return SCORE_TO_GRADE_POINT_TABLE.firstOrNull { score >= it.first }?.second ?: 0.0
+  if (score < GPA_PASS_SCORE) return 0.0
+  val diff = GPA_FULL_SCORE - score.coerceAtMost(GPA_FULL_SCORE)
+  return GPA_FORMULA_MAX_POINT - GPA_FORMULA_FACTOR * diff * diff / GPA_FORMULA_DENOMINATOR
 }
 
-/** 按常见规则估算绩点：先认等级制文案，再认百分制分数；无法判断时返回 null。 */
+/** 按北航官方标准估算绩点：先认五级制文案，再按百分制官方公式换算；无法判断时返回 null。 */
 internal fun estimateGradePointFromScore(score: String?): Double? {
   val text = normalizeScoreText(score) ?: return null
   LEVEL_GRADE_POINTS[text]?.let {
@@ -120,10 +147,16 @@ internal fun numericScoreFromText(score: String?): Double? {
   return numeric.takeIf { it.isFinite() && it >= 0.0 }
 }
 
-/** 解析官方绩点字段，非法值返回 null。 */
+/**
+ * 解析官方绩点字段，非法值返回 null。
+ *
+ * 只有**大于 0** 的值才认作官方绩点：部分接口版本会把缺席成绩的绩点写成 `0` 或 `0.0`（占位值），
+ * 直接采信会把整学期 GPA 压成 0；真正的未通过课程另有 `SFJG_DISPLAY` / 成绩文本判定，不依赖这里。
+ * 因此 0 与空值一律视为「没有官方绩点」，回落到按北航官方公式估算。
+ */
 internal fun parseOfficialGradePoint(gradePoint: String?): Double? {
   val value = gradePoint?.trim()?.takeIf { it.isNotEmpty() }?.toDoubleOrNull() ?: return null
-  return value.takeIf { it.isFinite() && it >= 0.0 }
+  return value.takeIf { it.isFinite() && it > 0.0 }
 }
 
 /** 成绩页里唯一标识一门课程，用于「逐门调分模拟」的状态映射。 */
@@ -159,6 +192,8 @@ internal data class GradeRecord(
     val course: Grade,
     /** 大于 0 的学分，缺失或非正数时为 null。 */
     val credit: Double?,
+    /** 大于 0 的学时，缺失或非正数时为 null。 */
+    val hours: Double?,
     /** 官方绩点或估算绩点，无法换算时为 null。 */
     val gradePoint: Double?,
     val gradePointSource: GradePointSource?,
@@ -174,12 +209,16 @@ internal data class GradeRecord(
 private val GradeRecord.creditValue: Double
   get() = credit ?: 0.0
 
+private val GradeRecord.hoursValue: Double
+  get() = hours ?: 0.0
+
 private val GradeRecord.pointValue: Double
   get() = gradePoint ?: 0.0
 
 /** 把一条成绩转换成统计口径。 */
 internal fun toGradeRecord(grade: Grade): GradeRecord {
   val credit = grade.credit?.takeIf { it.isFinite() && it > 0.0 }
+  val hours = grade.hours?.takeIf { it.isFinite() && it > 0.0 }
   val scoreText = normalizeScoreText(grade.score)
   val officialPoint = parseOfficialGradePoint(grade.gradePoint)
   val estimatedPoint = if (officialPoint == null) estimateGradePointFromScore(scoreText) else null
@@ -209,6 +248,7 @@ internal fun toGradeRecord(grade: Grade): GradeRecord {
       key = grade.gpaKey(),
       course = grade,
       credit = credit,
+      hours = hours,
       gradePoint = point,
       gradePointSource = source,
       numericScore = numericScoreFromText(scoreText),
@@ -241,12 +281,27 @@ internal data class GpaSummary(
     val gpa: Double?,
     /** 参与 GPA 计算的学分合计。 */
     val countedCredits: Double,
+    /** 参与 GPA 计算的学时合计（官网「学时统计」同口径，只是范围限定为计入 GPA 的课程）。 */
+    val countedHours: Double,
     /** 参与 GPA 计算的课程数。 */
     val countedCourses: Int,
     /** 其中绩点由估算得到的课程数。 */
     val estimatedCourses: Int,
-    /** 成绩条目总数。 */
+    /** 成绩条目总数（含未通过、两级制与无效记录）。 */
     val totalCourses: Int,
+    /**
+     * 「全部」口径的学分合计：当前范围内所有**有效**课程的学分之和。
+     *
+     * 含未通过课程，也含两级制（通过 / 不通过）课程——北航口径下这两类课程计入总学分与课程数，
+     * 但不计入 GPA；不含成绩无效（如作弊、取消资格）的记录。
+     */
+    val totalCredits: Double,
+    /**
+     * 「全部」口径的学时合计：与 [totalCredits] 完全相同的范围（含未通过与两级制，不含成绩无效）。
+     *
+     * 对应官网成绩页的「学时统计」，接口字段为 `xs`。
+     */
+    val totalHours: Double,
     /** 被忽略的条目数。 */
     val skippedCourses: Int,
     val weightedAverageScore: Double?,
@@ -269,6 +324,12 @@ internal fun GpaBreakdown.summary(): GpaSummary {
         null
       }
 
+  // 「全部」口径：未通过与两级制课程都算（北航口径），只有成绩无效的记录被排除。
+  val validRecords = records.filter { it.skipReason != GpaSkipReason.INVALID }
+  val totalCredits = validRecords.sumOf { it.creditValue }
+  // 学时跟学分同口径（官网「学时统计」也是把有效课程的学时相加），课程没给学时就不计入。
+  val totalHours = validRecords.sumOf { it.hoursValue }
+
   val scoredRecords = scored
   val scoredCredits = scoredRecords.sumOf { it.creditValue }
   val weighted =
@@ -283,9 +344,12 @@ internal fun GpaBreakdown.summary(): GpaSummary {
   return GpaSummary(
       gpa = gpa,
       countedCredits = round2(countedCredits),
+      countedHours = round2(countedRecords.sumOf { it.hoursValue }),
       countedCourses = countedRecords.size,
       estimatedCourses = countedRecords.count { it.gradePointSource == GradePointSource.ESTIMATED },
       totalCourses = records.size,
+      totalCredits = round2(totalCredits),
+      totalHours = round2(totalHours),
       skippedCourses = records.size - countedRecords.size,
       weightedAverageScore = weighted,
       arithmeticAverageScore = arithmetic,
@@ -377,7 +441,7 @@ internal data class GpaSimulation(
     val delta: Double?,
 )
 
-/** 模拟「新增一门课程」后的 GPA：把新课程按换算表折算成绩点后并入加权平均。 学分或分数非法时返回 null。 */
+/** 模拟「新增一门课程」后的 GPA：把新课程按北航官方公式折算成绩点后并入加权平均。 学分或分数非法时返回 null。 */
 internal fun simulateAddedCourse(
     summary: GpaSummary,
     credit: Double?,
@@ -422,18 +486,19 @@ internal fun GpaBreakdown.withAdjustments(adjustments: Map<String, Double>): Gpa
 internal data class GradeStatistics(
     val courseCount: Int,
     val totalCredits: Double,
+    val totalHours: Double,
     val gpa: Double?,
     val weightedAverage: Double?,
     val arithmeticAverage: Double?,
 )
 
-/** 汇总一组成绩的统计值（含官方绩点优先的加权 GPA）。 */
+/** 汇总一组成绩的统计值（含官方绩点优先的加权 GPA；总学分/总学时按「全部有效课程」口径）。 */
 internal fun calculateGradeStatistics(grades: List<Grade>): GradeStatistics {
   val summary = buildGpaBreakdown(grades).summary()
   return GradeStatistics(
       courseCount = summary.totalCourses,
-      totalCredits =
-          round2(grades.mapNotNull { it.credit?.takeIf { credit -> credit > 0.0 } }.sum()),
+      totalCredits = summary.totalCredits,
+      totalHours = summary.totalHours,
       gpa = summary.gpa,
       weightedAverage = summary.weightedAverageScore,
       arithmeticAverage = summary.arithmeticAverageScore,

@@ -60,8 +60,8 @@ class GradeScreenLogicTest {
 
     assertEquals(2, statistics.courseCount)
     assertEquals(5.0, statistics.totalCredits)
-    // 100 -> 4.0 绩点，80 -> 3.0 绩点：(4.0*2 + 3.0*3) / 5 = 3.4
-    assertEquals(3.4, statistics.gpa)
+    // 官方公式：100 -> 4.0 绩点，80 -> 4 - 3*400/1600 = 3.25 绩点：(4.0*2 + 3.25*3) / 5 = 3.55
+    assertEquals(3.55, statistics.gpa)
     assertEquals(88.0, statistics.weightedAverage)
     assertEquals(90.0, statistics.arithmeticAverage)
   }
@@ -125,18 +125,25 @@ class GradeScreenLogicTest {
   }
 
   @Test
-  fun `score to grade point table follows the common four point scale`() {
+  fun `grade point follows the official buaa formula`() {
+    // 北航官方公式：绩点 = 4 − 3 × (100 − X)² ÷ 1600（连续函数，不是分段表）
     assertEquals(4.0, gradePointFromScore100(100.0))
-    assertEquals(4.0, gradePointFromScore100(90.0))
-    assertEquals(3.7, gradePointFromScore100(85.0))
-    assertEquals(3.3, gradePointFromScore100(84.0))
-    assertEquals(3.0, gradePointFromScore100(78.0))
-    assertEquals(2.7, gradePointFromScore100(75.0))
-    assertEquals(2.3, gradePointFromScore100(72.0))
-    assertEquals(2.0, gradePointFromScore100(68.0))
-    assertEquals(1.5, gradePointFromScore100(64.0))
+    assertEquals(3.953125, gradePointFromScore100(95.0))
+    assertEquals(3.8125, gradePointFromScore100(90.0))
+    assertEquals(3.578125, gradePointFromScore100(85.0))
+    assertEquals(3.25, gradePointFromScore100(80.0))
+    assertEquals(2.828125, gradePointFromScore100(75.0))
+    assertEquals(2.3125, gradePointFromScore100(70.0))
+    assertEquals(1.703125, gradePointFromScore100(65.0))
+    // 60 分正好 1.0
     assertEquals(1.0, gradePointFromScore100(60.0))
+    // 不及格记 0（公式在低分会算出负数，这里不采用）
     assertEquals(0.0, gradePointFromScore100(59.9))
+    assertEquals(0.0, gradePointFromScore100(0.0))
+    // 脏数据兜底：超过满分按满分算，非法值记 0
+    assertEquals(4.0, gradePointFromScore100(105.0))
+    assertEquals(0.0, gradePointFromScore100(Double.NaN))
+    assertEquals(0.0, gradePointFromScore100(Double.POSITIVE_INFINITY))
   }
 
   @Test
@@ -145,17 +152,18 @@ class GradeScreenLogicTest {
         buildGpaBreakdown(
                 listOf(
                     Grade(courseName = "A", credit = 2.0, score = "80", gradePoint = "3.3"),
-                    Grade(courseName = "B", credit = 2.0, score = "80"),
+                    Grade(courseName = "B", credit = 2.0, score = "90"),
                 )
             )
             .summary()
 
-    // A 用官方绩点 3.3，B 没有官方绩点按 80 分估算成 3.0：(3.3*2 + 3.0*2) / 4 = 3.15
-    assertEquals(3.15, summary.gpa)
+    // A 用官方绩点 3.3；B 没有官方绩点，90 分按官方公式估算成 3.8125：(3.3*2 + 3.8125*2) / 4 = 3.56
+    assertEquals(3.56, summary.gpa)
     assertEquals(1, summary.estimatedCourses)
     assertTrue(summary.hasEstimate)
     assertEquals(2, summary.countedCourses)
     assertEquals(4.0, summary.countedCredits)
+    assertEquals(4.0, summary.totalCredits)
   }
 
   @Test
@@ -174,9 +182,77 @@ class GradeScreenLogicTest {
 
     assertEquals(1, summary.countedCourses)
     assertEquals(3.0, summary.countedCredits)
-    assertEquals(4.0, summary.gpa)
+    assertEquals(3.81, summary.gpa)
     assertEquals(5, summary.totalCourses)
     assertEquals(4, summary.skippedCourses)
+    // 「全部」学分不含无效记录（3 学分的作弊记录）：0 + 2 + 0 + 1 + 3 = 6
+    assertEquals(6.0, summary.totalCredits)
+  }
+
+  @Test
+  fun `all courses totals include failed and pass-fail courses`() {
+    val summary =
+        buildGpaBreakdown(
+                listOf(
+                    grade(score = "90", credit = 3.0),
+                    grade(score = "55", credit = 2.0),
+                    grade(score = "通过", credit = 1.0),
+                    grade(score = "不通过", credit = 1.0),
+                    Grade(courseName = "无效", credit = 4.0, score = "90", effective = "否"),
+                )
+            )
+            .summary()
+
+    // 成绩条目总数：含未通过、两级制与无效记录
+    assertEquals(5, summary.totalCourses)
+    // 总学分：含未通过与两级制课程，不含无效记录（3 + 2 + 1 + 1）
+    assertEquals(7.0, summary.totalCredits)
+    // 计入 GPA 的只有 90 分那门（未通过、两级制、无效记录都不计入）
+    assertEquals(1, summary.countedCourses)
+    assertEquals(3.0, summary.countedCredits)
+    assertEquals(3.81, summary.gpa)
+  }
+
+  @Test
+  fun `total hours follow the all-course scope used by total credits`() {
+    val summary =
+        buildGpaBreakdown(
+                listOf(
+                    Grade(courseName = "有学时", credit = 3.0, score = "90", hours = 48.0),
+                    Grade(courseName = "未通过", credit = 2.0, score = "50", hours = 32.0),
+                    Grade(courseName = "两级制", credit = 1.0, score = "通过", hours = 16.0),
+                    Grade(courseName = "无效", credit = 4.0, score = "90", hours = 64.0, effective = "否"),
+                    Grade(courseName = "无学时", credit = 2.0, score = "80"),
+                )
+            )
+            .summary()
+
+    // 总学时与总学分同口径：含未通过、两级制，不含成绩无效的记录（48 + 32 + 16）
+    assertEquals(96.0, summary.totalHours)
+    // 计入 GPA 的只有「有学时」那门
+    assertEquals(48.0, summary.countedHours)
+    // 总学分同样不含无效记录：3 + 2 + 1 + 2 = 8
+    assertEquals(8.0, summary.totalCredits)
+  }
+
+  @Test
+  fun `placeholder zero grade point falls back to official formula`() {
+    // 部分接口版本把缺席成绩的绩点写成 0，采信它会直接把 GPA 压成 0，因此 0 视为「没有官方绩点」
+    val summary =
+        buildGpaBreakdown(listOf(Grade(courseName = "A", credit = 2.0, score = "80", gradePoint = "0")))
+            .summary()
+
+    assertEquals(3.25, summary.gpa)
+    assertEquals(1, summary.countedCourses)
+  }
+
+  @Test
+  fun `grade detail rows show hours when the api provides them`() {
+    val rows = gradeDetailRows(Grade(courseName = "高等数学", credit = 4.0, hours = 64.0))
+    assertTrue(rows.any { it.label == "学时" && it.value == "64" })
+
+    val withoutHours = gradeDetailRows(Grade(courseName = "高等数学", credit = 4.0))
+    assertFalse(withoutHours.any { it.label == "学时" })
   }
 
   @Test
@@ -209,16 +285,18 @@ class GradeScreenLogicTest {
                 )
             )
             .summary()
-    assertEquals(3.0, summary.gpa)
+    // 80 分按官方公式 = 3.25 绩点
+    assertEquals(3.25, summary.gpa)
 
     val simulation = simulateAddedCourse(summary, credit = 2.0, score = 90.0)
 
     assertNotNull(simulation)
-    assertEquals(4.0, simulation.addedGradePoint)
-    // (3.0*4 + 4.0*2) / 6 = 3.33
-    assertEquals(3.33, simulation.projectedGpa)
-    assertEquals(0.33, simulation.delta)
-    assertEquals("+0.33", formatDelta(simulation.delta))
+    // 90 分按官方公式 = 3.8125 绩点
+    assertEquals(3.8125, simulation.addedGradePoint)
+    // (3.25*4 + 3.8125*2) / 6 = 3.4375 -> 3.44
+    assertEquals(3.44, simulation.projectedGpa)
+    assertEquals(0.19, simulation.delta)
+    assertEquals("+0.19", formatDelta(simulation.delta))
   }
 
   @Test
@@ -238,12 +316,12 @@ class GradeScreenLogicTest {
                 Grade(id = "2", courseName = "B", credit = 2.0, score = "80"),
             )
         )
-    assertEquals(3.0, breakdown.summary().gpa)
+    assertEquals(3.25, breakdown.summary().gpa)
 
-    // 把 A 从 80 分提到 90 分：绩点 3.0 -> 4.0
+    // 把 A 从 80 分提到 90 分：绩点 3.25 -> 3.8125，GPA (3.8125*2 + 3.25*2) / 4 = 3.53
     val adjusted = breakdown.withAdjustments(mapOf("1" to 90.0)).summary()
 
-    assertEquals(3.5, adjusted.gpa)
+    assertEquals(3.53, adjusted.gpa)
     assertEquals(2, adjusted.countedCourses)
   }
 
@@ -276,7 +354,8 @@ class GradeScreenLogicTest {
         )
 
     assertEquals(listOf("2023-2024-2", "2024-2025-1"), points.map { it.termCode })
-    assertEquals(listOf(3.0, 4.0), points.map { it.summary.gpa })
+    // 80 -> 3.25 绩点，90 -> 3.8125 绩点（官方公式）
+    assertEquals(listOf(3.25, 3.81), points.map { it.summary.gpa })
     assertEquals("2024-2025学年第一学期", points.last().termName)
   }
 

@@ -2,6 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Android 12+ 精确闹钟：未声明时 setExactAndAllowWhileIdle 会抛 SecurityException，
+         只能退化到非精确闹钟，Doze/待机下提醒可能被推迟几十分钟甚至收不到。 -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- 开机后重新排课提醒与计划提醒：AlarmManager 的闹钟不会跨重启存活。 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="false"
@@ -38,6 +43,11 @@
         </provider>
         <receiver android:name="cn.edu.buaa.hzcampus.ui.common.util.ClassReminderReceiver" android:exported="false" />
         <receiver android:name="cn.edu.buaa.hzcampus.ui.common.util.PlanReminderReceiver" android:exported="false" />
+        <receiver android:name="cn.edu.buaa.hzcampus.ui.common.util.BootReminderReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
         <activity android:name="cn.edu.buaa.hzcampus.widget.ScheduleWidgetActivity" android:exported="false" />
         <activity
             android:exported="true"
