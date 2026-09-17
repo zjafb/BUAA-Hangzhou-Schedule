@@ -5,8 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
@@ -14,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cn.edu.buaa.hzcampus.api.ConnectionMode
@@ -45,6 +44,7 @@ import cn.edu.buaa.hzcampus.ui.screens.evaluation.EvaluationScreen
 import cn.edu.buaa.hzcampus.ui.screens.evaluation.EvaluationViewModel
 import cn.edu.buaa.hzcampus.ui.screens.exam.ExamScreen
 import cn.edu.buaa.hzcampus.ui.screens.exam.ExamViewModel
+import cn.edu.buaa.hzcampus.ui.screens.grade.CourseQueryScreen
 import cn.edu.buaa.hzcampus.ui.screens.grade.GradeScoreWatchViewModel
 import cn.edu.buaa.hzcampus.ui.screens.grade.GradeScreen
 import cn.edu.buaa.hzcampus.ui.screens.grade.GradeUiState
@@ -81,7 +81,10 @@ enum class AppScreen {
   ABOUT,
   SCHEDULE,
   EXAM,
+  /** 高级功能「成绩查询」：GPA 统计、成绩分析、绩点模拟。 */
   GRADE,
+  /** 普通功能「课程查询」：逐门课程及其成绩、学分、学时明细。 */
+  COURSE_QUERY,
   COURSE_DETAIL,
   CLASSROOM_QUERY,
   MAIL,
@@ -212,6 +215,8 @@ fun MainAppScreen(
   val examViewModel: ExamViewModel = viewModel(key = "exam") { ExamViewModel() }
   val examUiState by examViewModel.uiState.collectAsState()
   var showExamTermMenu by remember { mutableStateOf(false) }
+  // 课程查询 / 成绩查询共用的学期下拉菜单开关。
+  var showGradeTermMenu by remember { mutableStateOf(false) }
   // 首页「考试倒计时」：从已加载的考试安排里取「今天及以后」最近的一场；取不到就是 null，卡片整块隐藏。
   val homeUpcomingExam =
       remember(examUiState.examData, homeNow.date) {
@@ -223,7 +228,7 @@ fun MainAppScreen(
     if (currentScreen == AppScreen.HOME) examViewModel.ensureLoaded()
   }
   val gradeViewModel: GradeViewModel? =
-      if (currentScreen == AppScreen.GRADE) {
+      if (currentScreen == AppScreen.GRADE || currentScreen == AppScreen.COURSE_QUERY) {
         viewModel(key = "grade") { GradeViewModel() }
       } else {
         null
@@ -331,13 +336,14 @@ fun MainAppScreen(
               AppScreen.REGULAR,
               AppScreen.SCHEDULE,
               AppScreen.EXAM,
-              AppScreen.GRADE,
+              AppScreen.COURSE_QUERY,
               AppScreen.COURSE_DETAIL,
               AppScreen.CLASSROOM_QUERY,
               AppScreen.MAIL,
               AppScreen.JUDGE_ASSIGNMENTS,
               AppScreen.JUDGE_ASSIGNMENT_DETAIL -> BottomNavTab.REGULAR
               AppScreen.ADVANCED,
+              AppScreen.GRADE,
               AppScreen.EVALUATION -> BottomNavTab.ADVANCED
               else -> null
             }
@@ -355,13 +361,14 @@ fun MainAppScreen(
             AppScreen.REGULAR,
             AppScreen.SCHEDULE,
             AppScreen.EXAM,
-            AppScreen.GRADE,
+            AppScreen.COURSE_QUERY,
             AppScreen.COURSE_DETAIL,
             AppScreen.CLASSROOM_QUERY,
             AppScreen.MAIL,
             AppScreen.JUDGE_ASSIGNMENTS,
             AppScreen.JUDGE_ASSIGNMENT_DETAIL -> BottomNavTab.REGULAR
             AppScreen.ADVANCED,
+            AppScreen.GRADE,
             AppScreen.EVALUATION -> BottomNavTab.ADVANCED
             else -> null
           }
@@ -420,7 +427,8 @@ fun MainAppScreen(
 
   fun openScoresFromHomeNotice() {
     gradeScoreWatchViewModel.consumeNotice()
-    navigateTo(AppScreen.GRADE)
+    // 「有成绩更新」的提示直接跳到逐门课程的「课程查询」，用户首先想看的是哪几门课出了分。
+    navigateTo(AppScreen.COURSE_QUERY)
   }
 
   LaunchedEffect(currentScreen) {
@@ -452,7 +460,8 @@ fun MainAppScreen(
       }
       AppScreen.SCHEDULE -> scheduleViewModel.ensureScheduleLoaded(forceRefresh = true)
       AppScreen.EXAM -> examViewModel.ensureLoaded(forceRefresh = true)
-      AppScreen.GRADE -> gradeViewModel?.ensureLoaded(forceRefresh = true)
+      AppScreen.GRADE,
+      AppScreen.COURSE_QUERY -> gradeViewModel?.ensureLoaded(forceRefresh = true)
       AppScreen.EVALUATION -> evaluationViewModel?.ensureLoaded(forceRefresh = true)
       AppScreen.JUDGE_ASSIGNMENTS,
       AppScreen.JUDGE_ASSIGNMENT_DETAIL ->
@@ -486,7 +495,8 @@ fun MainAppScreen(
       AppScreen.HOME -> startHomeBootstrap()
       AppScreen.SCHEDULE -> scheduleViewModel.ensureScheduleLoaded()
       AppScreen.EXAM -> examViewModel.ensureLoaded()
-      AppScreen.GRADE -> gradeViewModel?.ensureLoaded()
+      AppScreen.GRADE,
+      AppScreen.COURSE_QUERY -> gradeViewModel?.ensureLoaded()
       AppScreen.EVALUATION -> evaluationViewModel?.ensureLoaded()
       AppScreen.JUDGE_ASSIGNMENTS,
       AppScreen.JUDGE_ASSIGNMENT_DETAIL -> judgeViewModel.ensureAssignmentsLoaded()
@@ -504,7 +514,8 @@ fun MainAppScreen(
         AppScreen.ABOUT -> "关于"
         AppScreen.SCHEDULE -> "课程表"
         AppScreen.EXAM -> "考试查询"
-        AppScreen.GRADE -> gradeUiState.selectedTerm?.itemName ?: "成绩查询"
+        AppScreen.GRADE -> "成绩查询"
+        AppScreen.COURSE_QUERY -> "课程查询"
         AppScreen.COURSE_DETAIL -> "课程详情"
         AppScreen.CLASSROOM_QUERY -> "空教室查询"
         AppScreen.MAIL -> "邮件查询"
@@ -552,30 +563,34 @@ fun MainAppScreen(
                     }
                   }
                 }
-              } else if (currentScreen == AppScreen.GRADE) {
-                val currentTermIndex = gradeUiState.terms.indexOf(gradeUiState.selectedTerm)
-                IconButton(
-                    onClick = {
-                      if (currentTermIndex > 0) {
-                        gradeViewModel?.selectTerm(gradeUiState.terms[currentTermIndex - 1])
-                      }
-                    },
-                    enabled = currentTermIndex > 0,
-                ) {
-                  Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "上一学期")
-                }
-                IconButton(
-                    onClick = {
-                      if (
-                          currentTermIndex != -1 && currentTermIndex < gradeUiState.terms.size - 1
-                      ) {
-                        gradeViewModel?.selectTerm(gradeUiState.terms[currentTermIndex + 1])
-                      }
-                    },
-                    enabled =
-                        currentTermIndex != -1 && currentTermIndex < gradeUiState.terms.size - 1,
-                ) {
-                  Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "下一学期")
+              } else if (
+                  currentScreen == AppScreen.GRADE || currentScreen == AppScreen.COURSE_QUERY
+              ) {
+                // 课程查询与成绩查询共用同一个 ViewModel 和学期选择，这里用下拉菜单而不是左右箭头，
+                // 这样两个页面的顶部栏都能直接看到当前学期。
+                Box {
+                  TextButton(onClick = { showGradeTermMenu = true }) {
+                    Text(
+                        text = gradeUiState.selectedTerm?.itemName ?: "选择学期",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Icon(Icons.Default.ArrowDropDown, null)
+                  }
+                  DropdownMenu(
+                      expanded = showGradeTermMenu,
+                      onDismissRequest = { showGradeTermMenu = false },
+                  ) {
+                    gradeUiState.terms.forEach { term ->
+                      DropdownMenuItem(
+                          text = { Text(term.itemName) },
+                          onClick = {
+                            gradeViewModel?.selectTerm(term)
+                            showGradeTermMenu = false
+                          },
+                      )
+                    }
+                  }
                 }
               } else if (currentScreen == AppScreen.JUDGE_ASSIGNMENTS) {
                 IconButton(onClick = { showJudgeSortFilterDialog = true }) {
@@ -624,7 +639,7 @@ fun MainAppScreen(
               RegularFeaturesScreen(
                   onScheduleClick = { navigateTo(AppScreen.SCHEDULE) },
                   onExamClick = { navigateTo(AppScreen.EXAM) },
-                  onGradeClick = { navigateTo(AppScreen.GRADE) },
+                  onCourseQueryClick = { navigateTo(AppScreen.COURSE_QUERY) },
                   onClassroomClick = { navigateTo(AppScreen.CLASSROOM_QUERY) },
                   onJudgeClick = { navigateTo(AppScreen.JUDGE_ASSIGNMENTS) },
                   onSpaceReservationClick = openDingTalkSpaceReservation,
@@ -633,6 +648,7 @@ fun MainAppScreen(
               )
           AppScreen.ADVANCED ->
               AdvancedFeaturesScreen(
+                  onGradeClick = { navigateTo(AppScreen.GRADE) },
                   onEvaluationClick = { navigateTo(AppScreen.EVALUATION) },
               )
           AppScreen.MY -> MyScreen(userInfo = userInfo)
@@ -692,6 +708,7 @@ fun MainAppScreen(
               )
           AppScreen.EXAM -> ExamScreen(viewModel = examViewModel)
           AppScreen.GRADE -> gradeViewModel?.let { GradeScreen(viewModel = it) }
+          AppScreen.COURSE_QUERY -> gradeViewModel?.let { CourseQueryScreen(viewModel = it) }
           AppScreen.COURSE_DETAIL -> selectedCourse?.let { CourseDetailScreen(course = it) }
           AppScreen.CLASSROOM_QUERY ->
               classroomViewModel?.let {
@@ -724,6 +741,7 @@ fun MainAppScreen(
                   AppScreen.SCHEDULE,
                   AppScreen.EXAM,
                   AppScreen.GRADE,
+                  AppScreen.COURSE_QUERY,
                   AppScreen.COURSE_DETAIL,
                   AppScreen.MY,
                   AppScreen.SETTINGS,

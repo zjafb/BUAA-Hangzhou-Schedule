@@ -536,7 +536,20 @@ private fun ScheduleTopAppBar(
       actions = {
         if (onExportCalendar != null)
             IconButton(onClick = onExportCalendar, enabled = !isExportingCalendar) {
-              Icon(Icons.Default.CalendarMonth, "导出到系统日历")
+              // 图标下方补一行小字，避免用户看不出这是「导出 .ics 日历」入口。
+              Column(
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.Center,
+              ) {
+                Icon(Icons.Default.CalendarMonth, "导出到系统日历")
+                Text(
+                    text = ".ics导出",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 9.sp,
+                    lineHeight = 10.sp,
+                    maxLines = 1,
+                )
+              }
             }
         IconButton(onClick = onPreviousClick, enabled = isPreviousEnabled) {
           Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "上一周")

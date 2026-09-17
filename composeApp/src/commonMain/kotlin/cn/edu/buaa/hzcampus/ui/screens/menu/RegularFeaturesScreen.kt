@@ -34,7 +34,7 @@ data class FeatureItem(
 fun RegularFeaturesScreen(
     onScheduleClick: () -> Unit,
     onExamClick: () -> Unit,
-    onGradeClick: () -> Unit,
+    onCourseQueryClick: () -> Unit,
     onClassroomClick: () -> Unit,
     onJudgeClick: () -> Unit,
     onSpaceReservationClick: () -> Unit,
@@ -58,8 +58,8 @@ fun RegularFeaturesScreen(
           ),
           FeatureItem(
               id = "grade",
-              title = "成绩查询",
-              description = "查看课程成绩、学分和绩点",
+              title = "课程查询",
+              description = "逐门查看成绩、学分与学时明细",
               icon = Icons.Default.Grade,
           ),
           FeatureItem(
@@ -77,7 +77,7 @@ fun RegularFeaturesScreen(
           FeatureItem(
               id = "space",
               title = "空间预约",
-              description = "跳转钉钉工作台空间预约管理平台",
+              description = "在浏览器中打开空间预约管理平台",
               icon = Icons.Default.DateRange,
           ),
           FeatureItem(
@@ -107,7 +107,7 @@ fun RegularFeaturesScreen(
               when (feature.id) {
                 "schedule" -> onScheduleClick()
                 "exam" -> onExamClick()
-                "grade" -> onGradeClick()
+                "grade" -> onCourseQueryClick()
                 "classroom" -> onClassroomClick()
                 "judge" -> onJudgeClick()
                 "space" -> onSpaceReservationClick()

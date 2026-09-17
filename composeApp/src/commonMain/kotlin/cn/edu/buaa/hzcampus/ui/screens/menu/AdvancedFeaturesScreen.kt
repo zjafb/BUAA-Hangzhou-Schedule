@@ -15,7 +15,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AssignmentTurnedIn
-import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -39,21 +39,22 @@ internal data class AdvancedFeatureItem(
 internal fun advancedFeatureItems(): List<AdvancedFeatureItem> =
     listOf(
         AdvancedFeatureItem(
-            id = "evaluation",
-            title = "自动评教",
-            description = "一键完成学期末评教任务",
-            icon = Icons.Default.AssignmentTurnedIn,
+            id = "grade",
+            title = "成绩查询",
+            description = "GPA 统计、成绩分析图表与绩点模拟",
+            icon = Icons.Default.BarChart,
         ),
         AdvancedFeatureItem(
-            id = "more",
-            title = "更多功能",
-            description = "更多高级功能正在开发中...",
-            icon = Icons.Default.MoreHoriz,
+            id = "evaluation",
+            title = "自动评教",
+            description = "一键完成学期末评教任务（可用性未知，待测试）",
+            icon = Icons.Default.AssignmentTurnedIn,
         ),
     )
 
 @Composable
 fun AdvancedFeaturesScreen(
+    onGradeClick: () -> Unit,
     onEvaluationClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -70,12 +71,20 @@ fun AdvancedFeaturesScreen(
             feature = feature,
             onClick = {
               when (feature.id) {
+                "grade" -> onGradeClick()
                 "evaluation" -> onEvaluationClick()
               }
             },
         )
       }
     }
+    Text(
+        text = "更多高级功能正在开发中……",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+    )
   }
 }
 

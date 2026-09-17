@@ -44,7 +44,10 @@ import cn.edu.buaa.hzcampus.model.dto.Term
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
-fun GradeScreen(viewModel: GradeViewModel) {
+private fun GradeScreenScaffold(
+    viewModel: GradeViewModel,
+    content: @Composable (GradeUiState) -> Unit,
+) {
   val uiState by viewModel.uiState.collectAsState()
   val pullRefreshState =
       rememberPullRefreshState(
@@ -64,14 +67,7 @@ fun GradeScreen(viewModel: GradeViewModel) {
           Text(text = "加载失败: ${uiState.error}", color = MaterialTheme.colorScheme.error)
         }
       }
-      uiState.gradeData != null ->
-          GradeList(
-              grades = uiState.gradeData!!.grades,
-              termGrades = uiState.termGrades,
-              terms = uiState.terms,
-              selectedTerm = uiState.selectedTerm,
-              isSummaryLoading = uiState.isSummaryLoading,
-          )
+      else -> content(uiState)
     }
     PullRefreshIndicator(
         refreshing = uiState.isRefreshing,
@@ -82,12 +78,71 @@ fun GradeScreen(viewModel: GradeViewModel) {
 }
 
 /**
- * 成绩列表：顶部是 GPA 统计卡片，其下是成绩分析图表与绩点模拟，最后是逐门成绩。
+ * 高级功能「成绩查询」：只做统计与分析——GPA 概览、各学期 GPA / 分数分布图表、绩点模拟。
+ *
+ * 逐门课程的明细（成绩、学分、学时等）已拆到普通功能的 [CourseQueryScreen]；两个页面共用同一个 ViewModel，
+ * 因此学期切换、下拉刷新与数据缓存完全一致。
+ */
+@Composable
+fun GradeScreen(viewModel: GradeViewModel) {
+  GradeScreenScaffold(viewModel) { uiState ->
+    GradeAnalysisContent(
+        grades = uiState.gradeData?.grades.orEmpty(),
+        termGrades = uiState.termGrades,
+        terms = uiState.terms,
+        selectedTerm = uiState.selectedTerm,
+        isSummaryLoading = uiState.isSummaryLoading,
+    )
+  }
+}
+
+/**
+ * 普通功能「课程查询」：只列出逐门课程及其数据。
+ *
+ * 不含 GPA 统计、成绩分析图表与绩点模拟——这些在高级功能的 [GradeScreen] 中。
+ */
+@Composable
+fun CourseQueryScreen(viewModel: GradeViewModel) {
+  GradeScreenScaffold(viewModel) { uiState ->
+    val grades = uiState.gradeData?.grades.orEmpty()
+    LazyColumn(
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+      if (grades.isEmpty()) {
+        item {
+          Box(
+              modifier = Modifier.fillMaxWidth().padding(32.dp),
+              contentAlignment = Alignment.Center,
+          ) {
+            Text("暂无成绩", style = MaterialTheme.typography.bodyLarge)
+          }
+        }
+      } else {
+        item {
+          val totalHours = grades.sumOf { it.hours ?: 0.0 }
+          Text(
+              text =
+                  "共 ${grades.size} 门课程 · " +
+                      "${formatNumber(grades.sumOf { it.credit ?: 0.0 })} 学分" +
+                      if (totalHours > 0.0) " · ${formatNumber(totalHours)} 学时" else "",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+        items(grades) { grade -> GradeCard(grade = grade) }
+      }
+    }
+  }
+}
+
+/**
+ * 成绩分析内容：顶部是 GPA 统计卡片，其下是成绩分析图表与绩点模拟。
  *
  * 统计范围（本学期 / 全部学期）在 GPA 卡片上切换，成绩分析与绩点模拟共用同一个范围，因此 切换学期或范围时三者会一起联动。
  */
 @Composable
-private fun GradeList(
+private fun GradeAnalysisContent(
     grades: List<Grade>,
     termGrades: Map<String, GradeData>,
     terms: List<Term>,
@@ -143,19 +198,6 @@ private fun GradeList(
       )
     }
     item { GpaSimulatorCard(breakdown = breakdown, summary = summary, scopeLabel = scopeLabel) }
-
-    if (grades.isEmpty()) {
-      item {
-        Box(
-            modifier = Modifier.fillMaxWidth().padding(32.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-          Text("暂无成绩", style = MaterialTheme.typography.bodyLarge)
-        }
-      }
-    } else {
-      items(grades) { grade -> GradeCard(grade = grade) }
-    }
   }
 }
 
