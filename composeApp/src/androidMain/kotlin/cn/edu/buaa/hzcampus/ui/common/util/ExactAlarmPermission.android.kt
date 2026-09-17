@@ -10,7 +10,8 @@ import android.provider.Settings
 /** API 31 起精确闹钟必须显式授权；低版本没有这个开关，视为始终可用。 */
 private fun canScheduleExactAlarms(context: Context): Boolean {
   if (Build.VERSION.SDK_INT < 31) return true
-  val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return false
+  val alarmManager =
+      context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return false
   return runCatching { alarmManager.canScheduleExactAlarms() }.getOrDefault(false)
 }
 

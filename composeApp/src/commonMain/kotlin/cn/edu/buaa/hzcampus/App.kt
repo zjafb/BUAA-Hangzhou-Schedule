@@ -96,8 +96,7 @@ fun App() {
       // 该判定必须与 AuthViewModel.initializeApp() 的分支保持一致，否则会出现
       // "自动登录还没跑完就先结束 Splash → 闪一下登录页 → 再切回主页"。
       val restoreExpected =
-          mode != null &&
-              runCatching { authViewModel.hasRestorableSession() }.getOrDefault(false)
+          mode != null && runCatching { authViewModel.hasRestorableSession() }.getOrDefault(false)
       // 没有自动恢复能力时保留快速路径：本地有课表就尽早结束 Splash，
       // 让用户直接看到登录页与「查看离线课表」入口。
       if (!restoreExpected && ScheduleStore.hasSavedSchedule()) isSplashFinished = true
@@ -322,8 +321,8 @@ private const val SPLASH_RESTORE_TIMEOUT_MS = 30_000L
  * 启动阶段的判定结果。
  *
  * @property mode 解析出的连接模式；为 null 表示需要用户先选择连接模式（此时不会等待认证）。
- * @property authRestoreExpected 启动时是否存在可自动恢复的登录（勾选自动登录，或本地存有可恢复的持久会话）。
- *   为 true 时必须保持 Splash 直到认证给出确定结果，避免先闪一下登录页再自动登录进去。
+ * @property authRestoreExpected 启动时是否存在可自动恢复的登录（勾选自动登录，或本地存有可恢复的持久会话）。 为 true 时必须保持 Splash
+ *   直到认证给出确定结果，避免先闪一下登录页再自动登录进去。
  */
 internal data class StartupDecision(
     val mode: ConnectionMode?,

@@ -221,7 +221,13 @@ class GradeScreenLogicTest {
                     Grade(courseName = "有学时", credit = 3.0, score = "90", hours = 48.0),
                     Grade(courseName = "未通过", credit = 2.0, score = "50", hours = 32.0),
                     Grade(courseName = "两级制", credit = 1.0, score = "通过", hours = 16.0),
-                    Grade(courseName = "无效", credit = 4.0, score = "90", hours = 64.0, effective = "否"),
+                    Grade(
+                        courseName = "无效",
+                        credit = 4.0,
+                        score = "90",
+                        hours = 64.0,
+                        effective = "否",
+                    ),
                     Grade(courseName = "无学时", credit = 2.0, score = "80"),
                 )
             )
@@ -239,7 +245,9 @@ class GradeScreenLogicTest {
   fun `placeholder zero grade point falls back to official formula`() {
     // 部分接口版本把缺席成绩的绩点写成 0，采信它会直接把 GPA 压成 0，因此 0 视为「没有官方绩点」
     val summary =
-        buildGpaBreakdown(listOf(Grade(courseName = "A", credit = 2.0, score = "80", gradePoint = "0")))
+        buildGpaBreakdown(
+                listOf(Grade(courseName = "A", credit = 2.0, score = "80", gradePoint = "0"))
+            )
             .summary()
 
     assertEquals(3.25, summary.gpa)

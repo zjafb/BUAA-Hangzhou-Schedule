@@ -44,9 +44,8 @@ data class Grade(
     /**
      * 学时。
      *
-     * 注意：这里**故意不加** `@SerialName("XS")`。本科教务（byxt）的成绩接口不同版本的 `XS` 字段类型不一致
-     * （字符串 / 数字都有），若声明成 `Double?` 反序列化会直接抛错并让整个成绩列表加载失败。
-     * 学时统一由 [BuaaScoreCourse.toGrade] 按字符串解析后填进来。
+     * 注意：这里**故意不加** `@SerialName("XS")`。本科教务（byxt）的成绩接口不同版本的 `XS` 字段类型不一致 （字符串 / 数字都有），若声明成
+     * `Double?` 反序列化会直接抛错并让整个成绩列表加载失败。 学时统一由 [BuaaScoreCourse.toGrade] 按字符串解析后填进来。
      */
     val hours: Double? = null,
     @SerialName("XSZCJ") val score: String? = null,
@@ -108,15 +107,15 @@ data class BuaaScoreCourse(
     /**
      * 学时（`xs`）。
      *
-     * 官网成绩页（移动北航 > 成绩查询）的「学时统计」就是这一列之和。接口里该字段可能是字符串
-     * （`"48"`）也可能是数字（`48` / `48.0`），因此用 [JsonElement] 接收后再按文本解析。
+     * 官网成绩页（移动北航 > 成绩查询）的「学时统计」就是这一列之和。接口里该字段可能是字符串 （`"48"`）也可能是数字（`48` / `48.0`），因此用 [JsonElement]
+     * 接收后再按文本解析。
      */
     @SerialName("xs") val hours: JsonElement? = null,
     /**
      * 学分绩点（`jd`）。
      *
-     * 北航历次接口版本里该字段时有时无：存在时它就是成绩单上的官方绩点，必须优先使用；
-     * 不存在时为 null，由本地按北航官方公式估算。同样用 [JsonElement] 兼容字符串/数字两种形态。
+     * 北航历次接口版本里该字段时有时无：存在时它就是成绩单上的官方绩点，必须优先使用； 不存在时为 null，由本地按北航官方公式估算。同样用 [JsonElement]
+     * 兼容字符串/数字两种形态。
      */
     @SerialName("jd") val gradePoint: JsonElement? = null,
 )

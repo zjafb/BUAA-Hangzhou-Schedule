@@ -10,8 +10,7 @@ import cn.edu.buaa.hzcampus.repository.ScheduleRepository
 /**
  * 开机后重新排课提醒与计划提醒。
  *
- * AlarmManager 里的闹钟不会跨重启存活：手机重启后如果不重排，用户将再也收不到课前提醒，
- * 直到手动打开一次 App。这里在 BOOT_COMPLETED 之后按本地已存数据重新排一遍。
+ * AlarmManager 里的闹钟不会跨重启存活：手机重启后如果不重排，用户将再也收不到课前提醒， 直到手动打开一次 App。这里在 BOOT_COMPLETED 之后按本地已存数据重新排一遍。
  *
  * 过程全部容错：读不到课表/计划就静默跳过，任何异常都不会抛出（广播接收器崩溃会弹系统对话框）。
  */

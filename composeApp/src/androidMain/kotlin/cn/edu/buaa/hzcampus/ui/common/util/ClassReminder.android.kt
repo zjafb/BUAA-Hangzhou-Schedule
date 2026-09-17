@@ -49,8 +49,7 @@ actual fun scheduleClassReminders(courses: List<TodayClass>, advanceMinutes: Int
 }
 
 /**
- * 尽量使用精确闹钟；未授权精确闹钟权限（Android 12+）或系统拒绝时，
- * 保底退化为 [AlarmManager.setAndAllowWhileIdle] 的非精确闹钟，保证提醒仍然存在。
+ * 尽量使用精确闹钟；未授权精确闹钟权限（Android 12+）或系统拒绝时， 保底退化为 [AlarmManager.setAndAllowWhileIdle] 的非精确闹钟，保证提醒仍然存在。
  */
 private fun scheduleReminderAlarm(
     alarmManager: AlarmManager,
