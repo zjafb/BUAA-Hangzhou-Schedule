@@ -576,18 +576,19 @@ private fun MailAccountFormDialog(
   var email by remember { mutableStateOf(existing?.email ?: "") }
   var password by remember { mutableStateOf(existing?.password ?: "") }
   var passwordVisible by remember { mutableStateOf(false) }
-  var imapHost by remember { mutableStateOf(existing?.imapHost ?: "") }
+  var imapHost by remember { mutableStateOf(existing?.imapHost ?: BUAA_IMAP_HOST) }
   var imapPort by remember { mutableStateOf(existing?.imapPort?.toString() ?: "993") }
-  var smtpHost by remember { mutableStateOf(existing?.smtpHost ?: "") }
+  var smtpHost by remember { mutableStateOf(existing?.smtpHost ?: BUAA_SMTP_HOST) }
   var smtpPort by remember { mutableStateOf(existing?.smtpPort?.toString() ?: "465") }
   var showHelp by remember { mutableStateOf(false) }
 
   fun infer(email: String) {
-    val s = inferServers(email) ?: return
-    imapHost = s.imapHost
-    imapPort = s.imapPort.toString()
-    smtpHost = s.smtpHost
-    smtpPort = s.smtpPort.toString()
+    // 本 App 仅用于登录北航内部邮箱，服务器固定为北航邮件系统。
+    if (email.isBlank()) return
+    imapHost = BUAA_IMAP_HOST
+    imapPort = "993"
+    smtpHost = BUAA_SMTP_HOST
+    smtpPort = "465"
   }
 
   Dialog(onDismissRequest = onDismiss) {
@@ -671,12 +672,12 @@ private fun MailAccountFormDialog(
           )
         }
         Text(
-            "常见邮箱会自动推断服务器：QQ/163/126/Gmail/Outlook/北航。密码请使用 SMTP/IMAP 授权码。",
+            "本 App 仅用于登录北航内部邮箱（@buaa.edu.cn），服务器已内置：imap.buaa.edu.cn:993 / smtp.buaa.edu.cn:465。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            "如何开启 IMAP/SMTP 并获取授权码？点此查看说明",
+            "北航邮箱连接不上？点此查看说明",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.clickable { showHelp = true },
@@ -714,19 +715,16 @@ private fun MailAccountFormDialog(
     if (showHelp) {
       AlertDialog(
           onDismissRequest = { showHelp = false },
-          title = { Text("邮箱 IMAP/SMTP 配置说明") },
+          title = { Text("北航邮箱配置说明") },
           text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-              Text("1. 先在邮箱网页版开启 IMAP 和 SMTP 服务。")
-              Text("2. 密码请填写「授权码」（QQ/163/126 在邮箱设置中生成），不是登录密码。")
-              Text("3. 服务器与端口（SSL）：")
-              Text("　QQ：imap.qq.com:993，smtp.qq.com:465")
-              Text("　163：imap.163.com:993，smtp.163.com:465")
-              Text("　126：imap.126.com:993，smtp.126.com:465")
-              Text("　北航：imap.buaa.edu.cn:993，smtp.buaa.edu.cn:465（仅校园网可达）")
-              Text("　Gmail：imap.gmail.com:993，smtp.gmail.com:465（需应用专用密码）")
-              Text("　Outlook：outlook.office365.com:993，smtp.office365.com:587（STARTTLS）")
-              Text("4. 若提示「服务器或端口不正确」或「连接超时」，多为当前网络封锁邮件端口，请换手机流量再试。")
+              Text("本 App 仅支持登录北航内部邮箱（@buaa.edu.cn），不支持 QQ / 163 / Gmail 等外部邮箱。")
+              Text("1. 邮箱地址：填写你的北航邮箱，例如 xxxxxx@buaa.edu.cn。")
+              Text("2. 密码：填写北航邮箱的登录密码。")
+              Text("3. 服务器与端口（已自动填好，一般无需修改）：")
+              Text("　IMAP：imap.buaa.edu.cn，端口 993（SSL）")
+              Text("　SMTP：smtp.buaa.edu.cn，端口 465（SSL）")
+              Text("4. 北航邮箱服务器仅校园网（或校内 VPN）可达。若提示「连接超时」或「无法连接」，请确认已连接校园网后再试。")
             }
           },
           confirmButton = { TextButton(onClick = { showHelp = false }) { Text("知道了") } },
@@ -735,25 +733,6 @@ private fun MailAccountFormDialog(
   }
 }
 
-private data class InferredServers(
-    val imapHost: String,
-    val imapPort: Int,
-    val smtpHost: String,
-    val smtpPort: Int,
-)
-
-private fun inferServers(email: String): InferredServers? {
-  val domain = email.substringAfter('@', "").lowercase()
-  if (domain.isBlank()) return null
-  return when {
-    domain.contains("qq.com") -> InferredServers("imap.qq.com", 993, "smtp.qq.com", 465)
-    domain.contains("163.com") -> InferredServers("imap.163.com", 993, "smtp.163.com", 465)
-    domain.contains("126.com") -> InferredServers("imap.126.com", 993, "smtp.126.com", 465)
-    domain.contains("gmail.com") -> InferredServers("imap.gmail.com", 993, "smtp.gmail.com", 465)
-    domain.contains("outlook") || domain.contains("hotmail") ->
-        InferredServers("outlook.office365.com", 993, "smtp.office365.com", 587)
-    domain == "buaa.edu.cn" || domain.endsWith(".buaa.edu.cn") ->
-        InferredServers("imap.buaa.edu.cn", 993, "smtp.buaa.edu.cn", 465)
-    else -> null
-  }
-}
+/** 北航内部邮箱服务器（本 App 仅支持北航邮箱）。 */
+private const val BUAA_IMAP_HOST = "imap.buaa.edu.cn"
+private const val BUAA_SMTP_HOST = "smtp.buaa.edu.cn"

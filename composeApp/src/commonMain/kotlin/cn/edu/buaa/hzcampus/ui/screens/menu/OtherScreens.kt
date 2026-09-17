@@ -1,5 +1,6 @@
 package cn.edu.buaa.hzcampus.ui.screens.menu
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cn.edu.buaa.hzcampus.AppInfo
@@ -79,6 +81,7 @@ private fun UserInfoItem(label: String, value: String) {
 /** 「关于」页：应用信息 + 使用说明 + 更新日志。 */
 @Composable
 fun AboutScreen(modifier: Modifier = Modifier) {
+  val uriHandler = LocalUriHandler.current
   Column(
       modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -102,6 +105,23 @@ fun AboutScreen(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(text = "北航杭州是面向杭州国际校园的课表工具。", style = MaterialTheme.typography.bodyMedium)
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "本项目是基于 UBAA 的杭州国际校园适配改版（原版是北京校区通用校园客户端），在此致谢原作者。",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = "原版项目：https://github.com/BUAASubnet/UBAA",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier =
+                Modifier.clickable { uriHandler.openUri("https://github.com/BUAASubnet/UBAA") },
+        )
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -178,8 +198,8 @@ private val ABOUT_USAGE_GUIDE =
     7. 希冀作业
        查看编程作业、提交状态与得分；列表先显示摘要，详情会自动补全。
 
-    8. 邮件
-       添加邮箱账号（QQ / 163 / 126 / Gmail / Outlook / 北航会自动填服务器地址，密码请填授权码）。
+    8. 邮件（北航内部邮箱）
+       仅支持北航邮箱（@buaa.edu.cn）：服务器已内置（imap / smtp.buaa.edu.cn），填写北航邮箱地址和密码即可，需连接校园网。
        长按邮件、或点右上角「删除」进入批量删除；点开邮件后也能在详情里删除。
 
     9. 空间预约
