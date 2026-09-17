@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cn.edu.buaa.hzcampus.api.ConnectionMode
+import cn.edu.buaa.hzcampus.api.storage.CourseAttributeStore
 import cn.edu.buaa.hzcampus.api.storage.MailAccountsStore
 import cn.edu.buaa.hzcampus.api.storage.PlanStore
 import cn.edu.buaa.hzcampus.api.storage.ReminderStore
@@ -132,6 +133,9 @@ fun MainAppScreen(
   val mailBackend = remember { createMailBackend() }
   var mailUnread by remember { mutableStateOf(MailAccountsStore.lastUnreadCount()) }
 
+  // 课程名 -> 课程性质（必修/选修）。数据来自成绩数据，跨学期累积，见 CourseAttributeStore。
+  var courseAttributes by remember { mutableStateOf(CourseAttributeStore.all()) }
+
   fun openPlanEditor(existing: PlanTask?, date: String?, start: String?, end: String?) {
     planEdit = PlanEditRequest(existing, date, start, end)
   }
@@ -223,6 +227,11 @@ fun MainAppScreen(
         GradeScoreWatchViewModel(userKey = userData.schoolid)
       }
   val gradeScoreWatchUiState by gradeScoreWatchViewModel.uiState.collectAsState()
+
+  // 成绩数据落库后刷新课程性质映射：首页成绩监控或成绩页写完映射，今日课表的「必 / 选」标签随之出现。
+  LaunchedEffect(currentScreen, homeNow.date, gradeScoreWatchUiState.isLoading) {
+    courseAttributes = CourseAttributeStore.all()
+  }
 
   val evaluationViewModel: EvaluationViewModel? =
       if (currentScreen == AppScreen.EVALUATION) {
@@ -568,6 +577,7 @@ fun MainAppScreen(
           AppScreen.HOME ->
               HomeScreen(
                   todayClasses = todayScheduleState.todayClasses,
+                  courseAttributes = courseAttributes,
                   isLoading = todayScheduleState.isLoading,
                   isRefreshing = homeIsRefreshing,
                   error = todayScheduleState.error,

@@ -19,6 +19,8 @@ data class StoredGradeScoreEntry(
     val courseName: String? = null,
     val courseCode: String? = null,
     val score: String? = null,
+    /** 课程性质（必修/选修），来自成绩数据的 KCXZDM_DISPLAY；旧缓存里没有这个字段时为 null。 */
+    val courseAttribute: String? = null,
 )
 
 object GradeScoreCacheStore {

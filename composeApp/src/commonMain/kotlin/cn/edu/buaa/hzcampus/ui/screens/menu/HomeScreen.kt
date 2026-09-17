@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cn.edu.buaa.hzcampus.model.dto.PlanTask
 import cn.edu.buaa.hzcampus.model.dto.TodayClass
+import cn.edu.buaa.hzcampus.model.dto.courseAttributeBadgeLabel
 import cn.edu.buaa.hzcampus.ui.screens.grade.GradeScoreUpdateNotice
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -60,6 +61,8 @@ import kotlinx.datetime.toLocalDateTime
 @Composable
 internal fun HomeScreen(
     todayClasses: List<TodayClass>,
+    /** 课程名 -> 课程性质（必修/选修），来自成绩数据（CourseAttributeStore）；查不到时不显示标签。 */
+    courseAttributes: Map<String, String> = emptyMap(),
     isLoading: Boolean,
     isRefreshing: Boolean,
     error: String?,
@@ -154,7 +157,13 @@ internal fun HomeScreen(
             item { HomeEmptyCard(title = "今天没有课程安排", subtitle = "今天可以安心处理其他事项。") }
         else ->
             items(sortedClasses) { todayClass ->
-              TodayClassCard(todayClass = todayClass, onClick = { onTodayClassClick(todayClass) })
+              TodayClassCard(
+                  todayClass = todayClass,
+                  // 课程性质只存在于成绩数据里，查不到就返回 null，卡片不显示任何标记。
+                  attributeLabel =
+                      courseAttributeBadgeLabel(courseAttributes[todayClass.bizName.trim()]),
+                  onClick = { onTodayClassClick(todayClass) },
+              )
             }
       }
 
@@ -328,6 +337,7 @@ private fun HomeLoadingCard(title: String, subtitle: String) {
 @Composable
 private fun TodayClassCard(
     todayClass: TodayClass,
+    attributeLabel: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -380,16 +390,18 @@ private fun TodayClassCard(
           }
         }
 
-        todayClass.shortName?.let { shortName ->
+        // 原来的课程简称标签位置，改为显示课程性质的「必 / 选」；无法判断性质时不显示。
+        attributeLabel?.let { label ->
           Surface(
               color = MaterialTheme.colorScheme.primaryContainer,
               contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
               shape = MaterialTheme.shapes.small,
           ) {
             Text(
-                text = shortName,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             )
           }
         }

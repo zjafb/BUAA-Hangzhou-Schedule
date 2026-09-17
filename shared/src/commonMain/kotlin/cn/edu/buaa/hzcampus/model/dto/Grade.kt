@@ -53,6 +53,33 @@ data class Grade(
     @SerialName("CJRDFSDM_DISPLAY") val recognitionType: String? = null,
 )
 
+/**
+ * 提取「课程名 -> 课程性质」映射，用于把成绩数据里的课程性质沉淀到本地映射（见 CourseAttributeStore）。
+ *
+ * 课程名或课程性质为空白的条目会被忽略；课程性质取自 `KCXZDM_DISPLAY`，值形如「必修」「选修」。
+ */
+fun GradeData.courseAttributesByName(): Map<String, String> =
+    grades
+        .mapNotNull { grade ->
+          val name = grade.courseName.cleanText() ?: return@mapNotNull null
+          val attribute = grade.courseAttribute.cleanText() ?: return@mapNotNull null
+          name to attribute
+        }
+        .toMap()
+
+/**
+ * 把课程性质文案归类成课表标签：「必」或「选」，无法可靠判断时返回 null（界面不显示任何标记）。
+ *
+ * 规则宽松：包含「必修」→「必」；包含「选修 / 任选 / 限选 / 公选」等含「选」字的性质 →「选」；其余无法确认归属的文案（例如「学位课」）返回 null，宁可不显示也不显示错误内容。
+ */
+fun courseAttributeBadgeLabel(attribute: String?): String? {
+  val value = attribute?.filterNot { it.isWhitespace() } ?: return null
+  if (value.isEmpty()) return null
+  if (value.contains("必")) return "必"
+  if (value.contains("选")) return "选"
+  return null
+}
+
 /** 北航成绩应用响应体。 */
 @Serializable
 data class BuaaScoreResponse(

@@ -2,12 +2,14 @@ package cn.edu.buaa.hzcampus.ui.screens.grade
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cn.edu.buaa.hzcampus.api.storage.CourseAttributeStore
 import cn.edu.buaa.hzcampus.api.storage.GradeScoreCacheStore
 import cn.edu.buaa.hzcampus.api.storage.StoredGradeScoreCache
 import cn.edu.buaa.hzcampus.api.storage.StoredGradeScoreEntry
 import cn.edu.buaa.hzcampus.model.dto.Grade
 import cn.edu.buaa.hzcampus.model.dto.GradeData
 import cn.edu.buaa.hzcampus.model.dto.Term
+import cn.edu.buaa.hzcampus.model.dto.courseAttributesByName
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -87,6 +89,8 @@ internal constructor(
           }
 
       val latestCache = gradeData.toScoreCache(currentTerm)
+      // 成绩数据是课程性质（必修/选修）的唯一来源，顺手沉淀到本地映射，供首页课表显示「必 / 选」。
+      CourseAttributeStore.putAll(gradeData.courseAttributesByName())
       if (latestCache.scores.isEmpty()) {
         _uiState.value = _uiState.value.copy(isLoading = false, error = null)
         return@launch
@@ -152,6 +156,7 @@ private fun Grade.toScoreEntry(): StoredGradeScoreEntry? {
       courseName = courseName?.trim()?.takeIf { it.isNotEmpty() },
       courseCode = courseCode?.trim()?.takeIf { it.isNotEmpty() },
       score = score?.trim()?.takeIf { it.isNotEmpty() },
+      courseAttribute = courseAttribute?.trim()?.takeIf { it.isNotEmpty() },
   )
 }
 

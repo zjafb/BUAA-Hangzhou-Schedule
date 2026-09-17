@@ -3,8 +3,10 @@ package cn.edu.buaa.hzcampus.ui.screens.grade
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cn.edu.buaa.hzcampus.api.feature.GradeApi
+import cn.edu.buaa.hzcampus.api.storage.CourseAttributeStore
 import cn.edu.buaa.hzcampus.model.dto.GradeData
 import cn.edu.buaa.hzcampus.model.dto.Term
+import cn.edu.buaa.hzcampus.model.dto.courseAttributesByName
 import cn.edu.buaa.hzcampus.repository.GlobalTermRepository
 import cn.edu.buaa.hzcampus.repository.TermRepository
 import kotlinx.coroutines.async
@@ -141,6 +143,8 @@ internal constructor(
       return@coroutineScope
     }
 
+    recordCourseAttributes(selectedGradeData)
+
     val isSelectedTerm = selectedRequest.first.itemCode == _uiState.value.selectedTerm?.itemCode
     _uiState.value =
         _uiState.value.copy(
@@ -173,6 +177,8 @@ internal constructor(
         return@coroutineScope
       }
 
+      recordCourseAttributes(gradeData)
+
       val isCurrentSelectedTerm = term.itemCode == _uiState.value.selectedTerm?.itemCode
       _uiState.value =
           _uiState.value.copy(
@@ -194,6 +200,7 @@ internal constructor(
       gradeSource
           .getGrades(termCode)
           .onSuccess { gradeData ->
+            recordCourseAttributes(gradeData)
             _uiState.value =
                 _uiState.value.copy(
                     isLoading = false,
@@ -207,6 +214,11 @@ internal constructor(
                 _uiState.value.copy(isLoading = false, error = exception.message ?: "加载成绩信息失败")
           }
     }
+  }
+
+  /** 成绩数据是课程性质（必修/选修）的唯一来源：每次拿到成绩就沉淀到本地映射，这样成绩页拉过的历史学期课程都能被记住，供首页今日课表显示「必 / 选」。 */
+  private fun recordCourseAttributes(gradeData: GradeData) {
+    CourseAttributeStore.putAll(gradeData.courseAttributesByName())
   }
 }
 
