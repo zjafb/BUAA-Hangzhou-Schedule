@@ -142,7 +142,7 @@ fun AboutScreen(modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "技术栈：Kotlin Multiplatform + Compose Multiplatform",
+            text = "技术栈：Kotlin + Jetpack Compose（Android 客户端）",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -222,6 +222,10 @@ private val ABOUT_CHANGELOG =
     · 修复首页待办区希冀一直转圈——改为先出摘要、详情后台补全，并加超时与错误提示
     · 新增长按删除今日计划
     · 新增本页「使用说明」与「更新日志」
+    · 首页今日课表显示授课老师，点击课程可进入详情页
+    · 今日课表新增必修 / 选修标注（依据成绩中的课程属性）
+    · 邮箱改为仅支持北航内部邮箱
+    · 仅保留 Android 端，移除 iOS / 桌面 / Web 相关工程与构建配置
 
     v1.0.1
     · 修复启动与登录卡顿（服务器地址缺少端口）
