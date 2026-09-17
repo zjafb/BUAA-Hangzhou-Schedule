@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import cn.edu.buaa.hzcampus.repository.ScheduleStore
+import cn.edu.buaa.hzcampus.ui.common.util.AppContextHolder
 import cn.edu.buaa.hzcampus.ui.screens.schedule.OfflineScheduleScreen
 import cn.edu.buaa.hzcampus.ui.theme.HzCampusTheme
 
@@ -13,6 +14,8 @@ class ScheduleWidgetActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
+    // 从小组件直接进入时主界面可能还没创建过，这里同样交出应用 Context 供日历导出等能力使用。
+    AppContextHolder.context = applicationContext
     val sameAccount = intent.getStringExtra("owner") == ScheduleStore.account()
     setContent {
       HzCampusTheme {

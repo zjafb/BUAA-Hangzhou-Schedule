@@ -27,6 +27,15 @@
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/schedule_upcoming_widget_info" />
         </receiver>
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
         <receiver android:name="cn.edu.buaa.hzcampus.ui.common.util.ClassReminderReceiver" android:exported="false" />
         <receiver android:name="cn.edu.buaa.hzcampus.ui.common.util.PlanReminderReceiver" android:exported="false" />
         <activity android:name="cn.edu.buaa.hzcampus.widget.ScheduleWidgetActivity" android:exported="false" />

@@ -2,9 +2,9 @@ package cn.edu.buaa.hzcampus
 
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import buaa_hangzhou_schedule.composeapp.generated.resources.Res
+import buaa_hangzhou_schedule.composeapp.generated.resources.app_icon
 import org.jetbrains.compose.resources.painterResource
-import ubaa.composeapp.generated.resources.Res
-import ubaa.composeapp.generated.resources.app_icon
 
 fun main() = application {
   val icon = painterResource(Res.drawable.app_icon)

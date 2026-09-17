@@ -6,6 +6,8 @@ import cn.edu.buaa.hzcampus.api.feature.GraduateScheduleLoadException
 import cn.edu.buaa.hzcampus.api.feature.ScheduleApi
 import cn.edu.buaa.hzcampus.model.dto.*
 import cn.edu.buaa.hzcampus.repository.ScheduleRepository
+import cn.edu.buaa.hzcampus.ui.common.util.ScheduleCalendarExport
+import cn.edu.buaa.hzcampus.ui.common.util.exportScheduleToCalendar as buildScheduleCalendarExport
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -215,6 +217,7 @@ class ScheduleViewModel(
             weeks = emptyList(),
             weekSchedules = emptyMap(),
             diagnosticResponse = null,
+            calendarExportMessage = null,
             updatedAt = repository.updatedAt(term.itemCode),
         )
     loadWeeks(term)
@@ -426,12 +429,68 @@ class ScheduleViewModel(
     _uiState.value = _uiState.value.copy(error = null, diagnosticResponse = null)
     _todayScheduleState.value = _todayScheduleState.value.copy(error = null)
   }
+
+  /**
+   * 把指定学期的本地课表导出为 ICS 日历文件并唤起系统分享/导入面板。
+   *
+   * 只使用已本地化的数据（不联网）：没有本地数据时给出「请先本地化课表」的明确提示，不会静默失败。
+   */
+  fun exportScheduleToCalendar(term: Term? = _uiState.value.selectedTerm) {
+    if (_uiState.value.isExportingCalendar) return
+    if (term == null) {
+      showCalendarExportMessage("请先选择要导出的学期，再导出到系统日历")
+      return
+    }
+    val weeks =
+        repository
+            .weeks(term.itemCode)
+            .getOrElse {
+              showCalendarExportMessage(it.message ?: "读取本地课表失败，请先点击“课表本地化”")
+              return
+            }
+    val schedules =
+        repository
+            .schedules(term.itemCode)
+            .getOrElse {
+              showCalendarExportMessage(it.message ?: "读取本地课表失败，请先点击“课表本地化”")
+              return
+            }
+    _uiState.value =
+        _uiState.value.copy(isExportingCalendar = true, calendarExportMessage = null)
+    viewModelScope.launch {
+      val result =
+          runCatching {
+                buildScheduleCalendarExport(term.itemName, term.itemCode, weeks, schedules)
+              }
+              .getOrElse {
+                ScheduleCalendarExport(false, "导出失败：${it.message ?: "未知错误"}")
+              }
+      _uiState.value =
+          _uiState.value.copy(
+              isExportingCalendar = false,
+              calendarExportMessage = result.message,
+          )
+    }
+  }
+
+  /** 已展示过的导出提示置空，避免重复弹出。 */
+  fun clearCalendarExportMessage() {
+    if (_uiState.value.calendarExportMessage != null) {
+      _uiState.value = _uiState.value.copy(calendarExportMessage = null)
+    }
+  }
+
+  private fun showCalendarExportMessage(message: String) {
+    _uiState.value =
+        _uiState.value.copy(isExportingCalendar = false, calendarExportMessage = message)
+  }
 }
 
 /** 周课表界面 UI 状态。 */
 data class ScheduleUiState(
     val isLoading: Boolean = false,
     val isUpdating: Boolean = false,
+    val isExportingCalendar: Boolean = false,
     val updatedAt: String? = null,
     val terms: List<Term> = emptyList(),
     val weeks: List<Week> = emptyList(),
@@ -442,6 +501,8 @@ data class ScheduleUiState(
     val weekSchedules: Map<Int, WeeklySchedule> = emptyMap(),
     val error: String? = null,
     val diagnosticResponse: String? = null,
+    /** 课表导出到系统日历的一次性提示（成功或失败原因），展示后由界面清空。 */
+    val calendarExportMessage: String? = null,
 )
 
 /** 今日摘要界面 UI 状态。 */

@@ -35,6 +35,7 @@ import cn.edu.buaa.hzcampus.ui.common.components.BottomNavigation
 import cn.edu.buaa.hzcampus.ui.common.components.Sidebar
 import cn.edu.buaa.hzcampus.ui.common.util.BackHandlerCompat
 import cn.edu.buaa.hzcampus.ui.common.util.cancelClassReminders
+import cn.edu.buaa.hzcampus.ui.common.util.rememberOpenCampusGuide
 import cn.edu.buaa.hzcampus.ui.common.util.rememberOpenDingTalkSpaceReservation
 import cn.edu.buaa.hzcampus.ui.common.util.scheduleClassReminders
 import cn.edu.buaa.hzcampus.ui.common.util.schedulePlanReminders
@@ -43,7 +44,6 @@ import cn.edu.buaa.hzcampus.ui.screens.classroom.ClassroomViewModel
 import cn.edu.buaa.hzcampus.ui.screens.evaluation.EvaluationScreen
 import cn.edu.buaa.hzcampus.ui.screens.evaluation.EvaluationViewModel
 import cn.edu.buaa.hzcampus.ui.screens.exam.ExamScreen
-import cn.edu.buaa.hzcampus.ui.screens.exam.ExamUiState
 import cn.edu.buaa.hzcampus.ui.screens.exam.ExamViewModel
 import cn.edu.buaa.hzcampus.ui.screens.grade.GradeScoreWatchViewModel
 import cn.edu.buaa.hzcampus.ui.screens.grade.GradeScreen
@@ -120,6 +120,7 @@ fun MainAppScreen(
   val navController = rememberNavigationController()
   val currentScreen = navController.currentScreen
   val openDingTalkSpaceReservation = rememberOpenDingTalkSpaceReservation()
+  val openCampusGuide = rememberOpenCampusGuide()
 
   // 今日计划
   var planTasks by remember { mutableStateOf(PlanStore.list()) }
@@ -207,14 +208,20 @@ fun MainAppScreen(
     scheduleUiState.selectedTerm?.let(scheduleViewModel::loadWeeks)
   }
 
-  val examViewModel: ExamViewModel? =
-      if (currentScreen == AppScreen.EXAM) {
-        viewModel(key = "exam") { ExamViewModel() }
-      } else {
-        null
-      }
-  val examUiState = examViewModel?.uiState?.collectAsState()?.value ?: ExamUiState()
+  // 考试 ViewModel 常驻：首页的「考试倒计时」需要考试数据，不能等进入考试页才创建（原先按需创建）。
+  val examViewModel: ExamViewModel = viewModel(key = "exam") { ExamViewModel() }
+  val examUiState by examViewModel.uiState.collectAsState()
   var showExamTermMenu by remember { mutableStateOf(false) }
+  // 首页「考试倒计时」：从已加载的考试安排里取「今天及以后」最近的一场；取不到就是 null，卡片整块隐藏。
+  val homeUpcomingExam =
+      remember(examUiState.examData, homeNow.date) {
+        findUpcomingExam(examUiState.examData?.arranged.orEmpty(), homeNow.date)
+      }
+  // 首页需要考试数据，这里让它跟着首页一起加载。ensureLoaded 自带 loadedOnce 守卫且异步执行，
+  // 既不会重复请求，也不会阻塞首页其它内容；失败时首页静默地不显示倒计时卡片。
+  LaunchedEffect(currentScreen, homeNow.date) {
+    if (currentScreen == AppScreen.HOME) examViewModel.ensureLoaded()
+  }
   val gradeViewModel: GradeViewModel? =
       if (currentScreen == AppScreen.GRADE) {
         viewModel(key = "grade") { GradeViewModel() }
@@ -301,6 +308,9 @@ fun MainAppScreen(
 
   fun refreshHomeData() {
     homeManualRefreshPending = true
+    // 考试数据也一起刷新，但不算进 homeContentLoading：倒计时卡片不是首页的关键内容，
+    // 不该让下拉刷新一直转圈等它。
+    examViewModel.ensureLoaded(forceRefresh = true)
     startHomeBootstrap(forceRefresh = true)
   }
 
@@ -427,17 +437,21 @@ fun MainAppScreen(
   LaunchedEffect(connectionMode, userData.schoolid) {
     // 常驻 ViewModel
     scheduleViewModel.resetLoadedState()
+    examViewModel.resetLoadedState()
     // 按需 ViewModel（当前可能为 null，仅在存活时重置）
-    examViewModel?.resetLoadedState()
     gradeViewModel?.resetLoadedState()
     gradeScoreWatchViewModel.resetLoadedState()
     evaluationViewModel?.resetLoadedState()
     judgeViewModel.resetLoadedState()
     // 刷新当前页面数据
     when (currentScreen) {
-      AppScreen.HOME -> startHomeBootstrap(forceRefresh = true)
+      AppScreen.HOME -> {
+        startHomeBootstrap(forceRefresh = true)
+        // 首页的考试倒计时也要跟着换连接模式后的新数据。
+        examViewModel.ensureLoaded(forceRefresh = true)
+      }
       AppScreen.SCHEDULE -> scheduleViewModel.ensureScheduleLoaded(forceRefresh = true)
-      AppScreen.EXAM -> examViewModel?.ensureLoaded(forceRefresh = true)
+      AppScreen.EXAM -> examViewModel.ensureLoaded(forceRefresh = true)
       AppScreen.GRADE -> gradeViewModel?.ensureLoaded(forceRefresh = true)
       AppScreen.EVALUATION -> evaluationViewModel?.ensureLoaded(forceRefresh = true)
       AppScreen.JUDGE_ASSIGNMENTS,
@@ -471,7 +485,7 @@ fun MainAppScreen(
     when (currentScreen) {
       AppScreen.HOME -> startHomeBootstrap()
       AppScreen.SCHEDULE -> scheduleViewModel.ensureScheduleLoaded()
-      AppScreen.EXAM -> examViewModel?.ensureLoaded()
+      AppScreen.EXAM -> examViewModel.ensureLoaded()
       AppScreen.GRADE -> gradeViewModel?.ensureLoaded()
       AppScreen.EVALUATION -> evaluationViewModel?.ensureLoaded()
       AppScreen.JUDGE_ASSIGNMENTS,
@@ -531,7 +545,7 @@ fun MainAppScreen(
                       DropdownMenuItem(
                           text = { Text(it.itemName) },
                           onClick = {
-                            examViewModel?.selectTerm(it)
+                            examViewModel.selectTerm(it)
                             showExamTermMenu = false
                           },
                       )
@@ -592,6 +606,8 @@ fun MainAppScreen(
                           .filter { it.date == homeNow.date.toString() }
                           .sortedBy { it.startTime ?: "23:59" },
                   mailUnreadCount = mailUnread,
+                  upcomingExam = homeUpcomingExam,
+                  currentWeek = scheduleUiState.currentWeek,
                   onRetrySchedule = { scheduleViewModel.loadTodaySchedule() },
                   onRefresh = { refreshHomeData() },
                   onOpenScoresClick = { openScoresFromHomeNotice() },
@@ -602,6 +618,7 @@ fun MainAppScreen(
                   onPlanDelete = { task -> requestPlanDelete(task) },
                   onMailClick = { navigateTo(AppScreen.MAIL) },
                   onTodayClassClick = { todayClass -> openTodayClassDetail(todayClass) },
+                  onExamClick = { navigateTo(AppScreen.EXAM) },
               )
           AppScreen.REGULAR ->
               RegularFeaturesScreen(
@@ -612,6 +629,7 @@ fun MainAppScreen(
                   onJudgeClick = { navigateTo(AppScreen.JUDGE_ASSIGNMENTS) },
                   onSpaceReservationClick = openDingTalkSpaceReservation,
                   onMailClick = { navigateTo(AppScreen.MAIL) },
+                  onCampusGuideClick = openCampusGuide,
               )
           AppScreen.ADVANCED ->
               AdvancedFeaturesScreen(
@@ -641,6 +659,12 @@ fun MainAppScreen(
                   onUpdate = { scheduleViewModel.updateSchedule() },
                   onRefresh = { scheduleViewModel.ensureScheduleLoaded(forceRefresh = true) },
                   onImportCurrentTerm = { scheduleViewModel.updateSchedule(currentTerm = true) },
+                  onExportCalendar = {
+                    scheduleViewModel.exportScheduleToCalendar(scheduleUiState.selectedTerm)
+                  },
+                  isExportingCalendar = scheduleUiState.isExportingCalendar,
+                  calendarExportMessage = scheduleUiState.calendarExportMessage,
+                  onCalendarExportMessageShown = scheduleViewModel::clearCalendarExportMessage,
                   onTermSelected = { scheduleViewModel.selectTerm(it) },
                   onWeekSelected = { scheduleViewModel.selectWeek(it) },
                   onNavigateBack = { navigateBack() },
@@ -666,7 +690,7 @@ fun MainAppScreen(
                   onPlanClick = { task -> openPlanEditor(task, null, null, null) },
                   onPlanLongClick = { task -> requestPlanDelete(task) },
               )
-          AppScreen.EXAM -> examViewModel?.let { ExamScreen(viewModel = it) }
+          AppScreen.EXAM -> ExamScreen(viewModel = examViewModel)
           AppScreen.GRADE -> gradeViewModel?.let { GradeScreen(viewModel = it) }
           AppScreen.COURSE_DETAIL -> selectedCourse?.let { CourseDetailScreen(course = it) }
           AppScreen.CLASSROOM_QUERY ->

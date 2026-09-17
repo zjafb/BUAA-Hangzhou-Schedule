@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider 可分享的路径：课表 ICS 导出文件写在 cacheDir/schedule-calendar/ 下。 -->
+<paths>
+    <cache-path name="schedule_calendar" path="schedule-calendar/" />
+    <files-path name="schedule_calendar_files" path="schedule-calendar/" />
+</paths>

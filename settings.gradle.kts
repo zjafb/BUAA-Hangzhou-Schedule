@@ -25,8 +25,14 @@ plugins { id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 
 dependencyResolutionManagement {
   repositories {
-    maven("https://maven.aliyun.com/repository/public")
-    maven("https://maven.aliyun.com/repository/central")
+    // Vico（成绩页图表库）的 Kotlin Multiplatform 元数据在国内镜像上不完整（镜像有 .aar，
+    // 缺少子模块的 .module），因此这个 group 跳过镜像，直接从下方 sonatype releases 解析。
+    maven("https://maven.aliyun.com/repository/public") {
+      content { excludeGroup("com.patrykandpatrick.vico") }
+    }
+    maven("https://maven.aliyun.com/repository/central") {
+      content { excludeGroup("com.patrykandpatrick.vico") }
+    }
     maven("https://maven.aliyun.com/repository/google")
     google {
       mavenContent {
@@ -35,8 +41,8 @@ dependencyResolutionManagement {
         includeGroupAndSubgroups("com.google")
       }
     }
-    mavenCentral()
-    // Kamel 及其依赖所在的镜像仓库
+    mavenCentral { content { excludeGroup("com.patrykandpatrick.vico") } }
+    // Kamel 及其依赖所在的镜像仓库（Vico 亦从此仓库解析）
     maven("https://s01.oss.sonatype.org/content/repositories/releases/")
     maven("https://maven.pkg.jetbrains.space/public/p/kamel/maven")
   }

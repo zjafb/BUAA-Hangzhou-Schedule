@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Grade
 import androidx.compose.material.icons.filled.MailOutline
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.MeetingRoom
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,6 +39,7 @@ fun RegularFeaturesScreen(
     onJudgeClick: () -> Unit,
     onSpaceReservationClick: () -> Unit,
     onMailClick: () -> Unit,
+    onCampusGuideClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
   val features =
@@ -84,6 +86,12 @@ fun RegularFeaturesScreen(
               description = "绑定邮箱，收发与查询邮件",
               icon = Icons.Default.MailOutline,
           ),
+          FeatureItem(
+              id = "guide",
+              title = "校园指南",
+              description = "杭州校区学习生活自助指南",
+              icon = Icons.AutoMirrored.Filled.MenuBook,
+          ),
       )
 
   Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
@@ -104,6 +112,7 @@ fun RegularFeaturesScreen(
                 "judge" -> onJudgeClick()
                 "space" -> onSpaceReservationClick()
                 "mail" -> onMailClick()
+                "guide" -> onCampusGuideClick()
               }
             },
         )

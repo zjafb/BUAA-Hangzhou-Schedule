@@ -31,11 +31,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cn.edu.buaa.hzcampus.model.dto.Grade
+import cn.edu.buaa.hzcampus.model.dto.GradeData
+import cn.edu.buaa.hzcampus.model.dto.Term
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
@@ -62,7 +67,9 @@ fun GradeScreen(viewModel: GradeViewModel) {
       uiState.gradeData != null ->
           GradeList(
               grades = uiState.gradeData!!.grades,
-              allGrades = uiState.termGrades.values.flatMap { it.grades },
+              termGrades = uiState.termGrades,
+              terms = uiState.terms,
+              selectedTerm = uiState.selectedTerm,
               isSummaryLoading = uiState.isSummaryLoading,
           )
     }
@@ -74,31 +81,68 @@ fun GradeScreen(viewModel: GradeViewModel) {
   }
 }
 
+/**
+ * 成绩列表：顶部是 GPA 统计卡片，其下是成绩分析图表与绩点模拟，最后是逐门成绩。
+ *
+ * 统计范围（本学期 / 全部学期）在 GPA 卡片上切换，成绩分析与绩点模拟共用同一个范围，因此 切换学期或范围时三者会一起联动。
+ */
 @Composable
 private fun GradeList(
     grades: List<Grade>,
-    allGrades: List<Grade>,
+    termGrades: Map<String, GradeData>,
+    terms: List<Term>,
+    selectedTerm: Term?,
     isSummaryLoading: Boolean,
 ) {
+  var scope by remember { mutableStateOf(GpaScope.SELECTED_TERM) }
+  var analysisView by remember { mutableStateOf(GradeAnalysisView.TERM_GPA) }
+
+  val allGrades = remember(termGrades) { termGrades.values.flatMap { it.grades } }
+  val scopedGrades = if (scope == GpaScope.ALL_TERMS) allGrades else grades
+  val breakdown = remember(scopedGrades) { buildGpaBreakdown(scopedGrades) }
+  val summary = remember(breakdown) { breakdown.summary() }
+  val termPoints = remember(termGrades, terms) { termGpaPoints(termGrades, terms) }
+  val scopedTermPoints =
+      remember(termPoints, scope, selectedTerm) {
+        if (scope == GpaScope.ALL_TERMS) termPoints
+        else termPoints.filter { it.termCode == selectedTerm?.itemCode }
+      }
+  val previousTermPoint =
+      remember(termPoints, selectedTerm) {
+        val index = termPoints.indexOfFirst { it.termCode == selectedTerm?.itemCode }
+        if (index > 0) termPoints[index - 1] else null
+      }
+  val buckets = remember(breakdown) { breakdown.scoreDistribution() }
+  val skippedNote = remember(breakdown) { breakdown.skippedSummaryText() }
+
+  val termLabel = termDisplayName(selectedTerm, selectedTerm?.itemCode ?: "本学期")
+  val scopeLabel = if (scope == GpaScope.ALL_TERMS) "全部学期（${termGrades.size} 个已加载学期）" else termLabel
+
   LazyColumn(
       contentPadding = PaddingValues(16.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp),
   ) {
     item {
-      GradeSummaryCard(
-          title = "全部成绩",
-          statistics = calculateGradeStatistics(allGrades),
-          showCourseAndCredits = false,
-          isLoading = isSummaryLoading,
+      GpaOverviewCard(
+          summary = summary,
+          scope = scope,
+          onScopeChange = { scope = it },
+          scopeLabel = scopeLabel,
+          skippedNote = skippedNote,
+          isLoading = isSummaryLoading && scope == GpaScope.ALL_TERMS,
       )
     }
     item {
-      GradeSummaryCard(
-          title = "本学期",
-          statistics = calculateGradeStatistics(grades),
-          showCourseAndCredits = true,
+      GradeAnalysisCard(
+          scopeLabel = if (scope == GpaScope.ALL_TERMS) "全部学期" else termLabel,
+          view = analysisView,
+          onViewChange = { analysisView = it },
+          termPoints = scopedTermPoints,
+          previousTermPoint = if (scope == GpaScope.ALL_TERMS) null else previousTermPoint,
+          buckets = buckets,
       )
     }
+    item { GpaSimulatorCard(breakdown = breakdown, summary = summary, scopeLabel = scopeLabel) }
 
     if (grades.isEmpty()) {
       item {
@@ -112,76 +156,6 @@ private fun GradeList(
     } else {
       items(grades) { grade -> GradeCard(grade = grade) }
     }
-  }
-}
-
-@Composable
-private fun GradeSummaryCard(
-    title: String,
-    statistics: GradeStatistics,
-    showCourseAndCredits: Boolean,
-    isLoading: Boolean = false,
-) {
-  Card(
-      modifier = Modifier.fillMaxWidth(),
-      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-  ) {
-    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-      if (showCourseAndCredits) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-          SummaryValue(
-              label = "课程数",
-              value = statistics.courseCount.toString(),
-              modifier = Modifier.weight(1f),
-          )
-          SummaryValue(
-              label = "总学分",
-              value =
-                  if (statistics.totalCredits > 0.0) formatNumber(statistics.totalCredits)
-                  else "--",
-              modifier = Modifier.weight(1f),
-          )
-        }
-      }
-      Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(16.dp),
-      ) {
-        SummaryValue(
-            label = "GPA",
-            value = if (isLoading) "统计中" else statistics.gpa?.let(::formatGradePoint) ?: "--",
-            modifier = Modifier.weight(1f),
-        )
-        SummaryValue(
-            label = "加权平均分",
-            value =
-                if (isLoading) "统计中" else statistics.weightedAverage?.let(::formatNumber) ?: "--",
-            modifier = Modifier.weight(1f),
-        )
-        SummaryValue(
-            label = "算数平均分",
-            value =
-                if (isLoading) "统计中" else statistics.arithmeticAverage?.let(::formatNumber) ?: "--",
-            modifier = Modifier.weight(1f),
-        )
-      }
-    }
-  }
-}
-
-@Composable
-private fun SummaryValue(label: String, value: String, modifier: Modifier = Modifier) {
-  Column(modifier = modifier) {
-    Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-    Text(
-        label,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
   }
 }
 
@@ -288,7 +262,7 @@ private fun GradeInfoRow(
   }
 }
 
-private fun formatNumber(value: Double): String {
+internal fun formatNumber(value: Double): String {
   val rounded = kotlin.math.round(value * 100.0) / 100.0
   return if (rounded % 1.0 == 0.0) rounded.toInt().toString() else rounded.toString()
 }
@@ -299,87 +273,3 @@ internal fun formatGradePoint(value: Double): String {
   val decimalPart = kotlin.math.abs(rounded % 100)
   return "$integerPart.${decimalPart.toString().padStart(2, '0')}"
 }
-
-internal data class GradeStatistics(
-    val courseCount: Int,
-    val totalCredits: Double,
-    val gpa: Double?,
-    val weightedAverage: Double?,
-    val arithmeticAverage: Double?,
-)
-
-internal fun calculateGradeStatistics(grades: List<Grade>): GradeStatistics {
-  var gpaWeightedTotal = 0.0
-  var gpaCreditTotal = 0.0
-  var scoreWeightedTotal = 0.0
-  var scoreCreditTotal = 0.0
-  var arithmeticScoreTotal = 0.0
-  var arithmeticScoreCount = 0
-
-  grades.forEach { grade ->
-    val credit = grade.credit?.takeIf { it > 0.0 } ?: return@forEach
-    val score = grade.score?.trim()?.takeIf { it.isNotEmpty() } ?: return@forEach
-    val points = score.toGradePoint() ?: return@forEach
-    val numericScore = score.toWeightedAverageScore() ?: return@forEach
-
-    gpaWeightedTotal += points * credit
-    gpaCreditTotal += credit
-    scoreWeightedTotal += numericScore * credit
-    scoreCreditTotal += credit
-    arithmeticScoreTotal += numericScore
-    arithmeticScoreCount += 1
-  }
-
-  return GradeStatistics(
-      courseCount = grades.size,
-      totalCredits = grades.mapNotNull { it.credit?.takeIf { credit -> credit > 0.0 } }.sum(),
-      gpa = weightedValue(gpaWeightedTotal, gpaCreditTotal),
-      weightedAverage = weightedValue(scoreWeightedTotal, scoreCreditTotal),
-      arithmeticAverage = averageValue(arithmeticScoreTotal, arithmeticScoreCount),
-  )
-}
-
-private fun weightedValue(total: Double, credits: Double): Double? =
-    if (credits > 0.0) kotlin.math.round((total / credits) * 100.0) / 100.0 else null
-
-private fun averageValue(total: Double, count: Int): Double? =
-    if (count > 0) kotlin.math.round((total / count) * 100.0) / 100.0 else null
-
-private fun String.toGradePoint(): Double? {
-  val normalizedScore = normalizedLevelScore()
-  return when (normalizedScore) {
-    "优" -> 4.0
-    "良" -> 3.5
-    "中" -> 2.8
-    "及格" -> 1.7
-    "不及格" -> 0.0
-    "通过",
-    "不通过" -> null
-    else -> {
-      val numericScore = normalizedScore.toDoubleOrNull() ?: return null
-      if (numericScore < 60.0) 0.0
-      else 4.0 - (3.0 * (100.0 - numericScore) * (100.0 - numericScore) / 1600.0)
-    }
-  }
-}
-
-private fun String.toWeightedAverageScore(): Double? {
-  return when (normalizedLevelScore()) {
-    "优" -> 90.0
-    "良" -> 80.0
-    "中" -> 70.0
-    "及格" -> 60.0
-    "不及格" -> 0.0
-    "通过",
-    "不通过" -> null
-    else -> toDoubleOrNull()
-  }
-}
-
-private fun String.normalizedLevelScore(): String =
-    when (this) {
-      "优秀" -> "优"
-      "良好" -> "良"
-      "中等" -> "中"
-      else -> this
-    }

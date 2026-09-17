@@ -51,6 +51,11 @@ kotlin {
       implementation("org.jetbrains.compose.ui:ui-tooling-preview:$composeVersion")
       implementation(libs.androidx.activity.compose)
       implementation("org.eclipse.angus:angus-mail:2.0.3")
+      // 课表导出 ICS：biweekly 生成 iCalendar（仅 JVM/Android 可用，故只放 androidMain）
+      implementation("net.sf.biweekly:biweekly:0.6.8")
+      // 成绩页图表：Vico 2.4.4 的 Compose Multiplatform 版本，与本项目 Kotlin 2.3.20 / Material3 1.9.0 兼容。
+      // 它只发布 android / desktop / ios 产物，因此只在 Android 上启用，其余平台（含 Web）用自绘 Canvas 兜底。
+      implementation("com.patrykandpatrick.vico:multiplatform-m3:2.4.4")
     }
     commonMain.dependencies {
       implementation("org.jetbrains.compose.runtime:runtime:$composeVersion")

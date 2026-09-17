@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -158,6 +159,10 @@ fun OfflineScheduleScreen(
         onNavigateBack = onBack,
         onCourseClick = { course = it },
         updatedAt = state.updatedAt,
+        onExportCalendar = { model.exportScheduleToCalendar(state.selectedTerm) },
+        isExportingCalendar = state.isExportingCalendar,
+        calendarExportMessage = state.calendarExportMessage,
+        onCalendarExportMessageShown = model::clearCalendarExportMessage,
         modifier = Modifier.weight(1f),
     )
   }
@@ -197,6 +202,9 @@ fun OfflineScheduleScreen(
  * @param planTasks 当前需要在课表网格中展示的计划任务。
  * @param onPlanClick 点击计划块的编辑回调。
  * @param onPlanLongClick 长按计划块的删除回调。
+ * @param onExportCalendar 导出当前学期课表到系统日历（ICS）的回调；为 null 时不显示该入口。
+ * @param isExportingCalendar 是否正在生成并分享日历文件。
+ * @param calendarExportMessage 导出结果提示（成功或失败原因），展示后通过 [onCalendarExportMessageShown] 清空。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -224,13 +232,29 @@ fun ScheduleScreen(
     onImportCurrentTerm: (() -> Unit)? = null,
     diagnosticResponse: String? = null,
     weekSchedules: Map<Int, WeeklySchedule> = emptyMap(),
+    onExportCalendar: (() -> Unit)? = null,
+    isExportingCalendar: Boolean = false,
+    calendarExportMessage: String? = null,
+    onCalendarExportMessageShown: (() -> Unit)? = null,
 ) {
   val clipboard = LocalClipboardManager.current
   val exportResponse = LocalScheduleResponseExporter.current
   var responseCopied by remember(diagnosticResponse) { mutableStateOf(false) }
   var showWeekSelector by remember { mutableStateOf(false) }
   var showTermSelector by remember { mutableStateOf(false) }
+  var showCalendarExportDialog by remember { mutableStateOf(false) }
+  val snackbarHostState = remember { SnackbarHostState() }
   val currentWeekIndex = weeks.indexOf(selectedWeek)
+
+  LaunchedEffect(calendarExportMessage) {
+    val message = calendarExportMessage ?: return@LaunchedEffect
+    snackbarHostState.showSnackbar(
+        message = message,
+        withDismissAction = true,
+        duration = SnackbarDuration.Long,
+    )
+    onCalendarExportMessageShown?.invoke()
+  }
 
   Scaffold(
       topBar = {
@@ -247,8 +271,11 @@ fun ScheduleScreen(
             },
             isNextEnabled = currentWeekIndex != -1 && currentWeekIndex < weeks.size - 1,
             onTitleClick = { showWeekSelector = true },
+            isExportingCalendar = isExportingCalendar,
+            onExportCalendar = onExportCalendar?.let { { showCalendarExportDialog = true } },
         )
       },
+      snackbarHost = { SnackbarHost(snackbarHostState) },
       modifier = modifier,
   ) { paddingValues ->
     Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
@@ -385,6 +412,39 @@ fun ScheduleScreen(
         onDismiss = { showWeekSelector = false },
     )
   }
+
+  if (showCalendarExportDialog) {
+    CalendarExportDialog(
+        termName = selectedTerm?.itemName,
+        onConfirm = {
+          showCalendarExportDialog = false
+          onExportCalendar?.invoke()
+        },
+        onDismiss = { showCalendarExportDialog = false },
+    )
+  }
+}
+
+/** 导出到系统日历的确认对话框：说明会生成什么，避免用户误触。 */
+@Composable
+private fun CalendarExportDialog(
+    termName: String?,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text("导出到系统日历") },
+      text = {
+        Text(
+            "导出「${termName ?: "当前学期"}」的全部课程到日历文件（.ics）：" +
+                "每门课按实际上课周次逐周生成日程，含课前 15 分钟提醒。\n\n" +
+                "完成后会打开系统分享面板，选择「日历」即可导入手机日历，也可以分享到微信或网盘。"
+        )
+      },
+      confirmButton = { TextButton(onClick = onConfirm) { Text("导出") } },
+      dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+  )
 }
 
 /** Pager 消费已加载的周数据，在线模式切换到未加载的周时由 ViewModel 查询。 */
@@ -452,6 +512,8 @@ private fun ScheduleTopAppBar(
     onNextClick: () -> Unit,
     isNextEnabled: Boolean,
     onTitleClick: () -> Unit,
+    onExportCalendar: (() -> Unit)? = null,
+    isExportingCalendar: Boolean = false,
 ) {
   CenterAlignedTopAppBar(
       expandedHeight = 56.dp,
@@ -472,6 +534,10 @@ private fun ScheduleTopAppBar(
         }
       },
       actions = {
+        if (onExportCalendar != null)
+            IconButton(onClick = onExportCalendar, enabled = !isExportingCalendar) {
+              Icon(Icons.Default.CalendarMonth, "导出到系统日历")
+            }
         IconButton(onClick = onPreviousClick, enabled = isPreviousEnabled) {
           Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "上一周")
         }

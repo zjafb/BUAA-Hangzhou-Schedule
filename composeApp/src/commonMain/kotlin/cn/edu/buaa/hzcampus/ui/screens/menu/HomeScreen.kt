@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Info
@@ -48,8 +49,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import cn.edu.buaa.hzcampus.model.dto.ChinaHolidayKind
+import cn.edu.buaa.hzcampus.model.dto.ChinaHolidays
 import cn.edu.buaa.hzcampus.model.dto.PlanTask
 import cn.edu.buaa.hzcampus.model.dto.TodayClass
+import cn.edu.buaa.hzcampus.model.dto.Week
 import cn.edu.buaa.hzcampus.model.dto.courseAttributeBadgeLabel
 import cn.edu.buaa.hzcampus.ui.screens.grade.GradeScoreUpdateNotice
 import kotlin.time.Clock
@@ -74,6 +78,10 @@ internal fun HomeScreen(
     scoreUpdateNotice: GradeScoreUpdateNotice?,
     todayPlanTasks: List<PlanTask>,
     mailUnreadCount: Int,
+    /** 最近一场「今天及以后」的考试，由考试数据算出；为 null（未加载 / 已考完）时整块隐藏倒计时卡片。 */
+    upcomingExam: HomeUpcomingExam? = null,
+    /** 当前校历周，来自 ScheduleViewModel.uiState.currentWeek；为 null 时不显示周次标记。 */
+    currentWeek: Week? = null,
     onRetrySchedule: () -> Unit,
     onRefresh: () -> Unit,
     onOpenScoresClick: () -> Unit,
@@ -84,9 +92,14 @@ internal fun HomeScreen(
     onPlanDelete: (PlanTask) -> Unit,
     onMailClick: () -> Unit,
     onTodayClassClick: (TodayClass) -> Unit = {},
+    onExamClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
   val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+  // 校历周次：拿不到就不显示（weekRangeLabel 会对缺失/非法日期返回 null）。
+  val weekLabel = currentWeek?.let { weekRangeLabel(it) }
+  // 中国节假日：只有当天命中 2026 年安排表时才显示；表外日期完全不显示标记。
+  val holidayMark = ChinaHolidays.markOn(today)
   val pullRefreshState = rememberPullRefreshState(refreshing = isRefreshing, onRefresh = onRefresh)
   val todoLoadingSummary = todoLoadingSources.joinToString("、") { it.label }
   val sortedClasses =
@@ -125,11 +138,31 @@ internal fun HomeScreen(
             }
           }
           Spacer(modifier = Modifier.height(4.dp))
-          Text(
-              text = "${today.month.ordinal + 1}月${today.day}日",
-              style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
+          Row(
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text(
+                text = "${today.month.ordinal + 1}月${today.day}日",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            weekLabel?.let { label -> HomeMetaChip(text = label) }
+          }
+          holidayMark?.let { mark ->
+            Spacer(modifier = Modifier.height(6.dp))
+            // 放假用 tertiaryContainer（和首页其它提示条同一套配色），调休上班用 secondaryContainer 区分。
+            val isHoliday = mark.kind == ChinaHolidayKind.HOLIDAY
+            HomeMetaChip(
+                text = ChinaHolidays.label(mark),
+                containerColor =
+                    if (isHoliday) MaterialTheme.colorScheme.tertiaryContainer
+                    else MaterialTheme.colorScheme.secondaryContainer,
+                contentColor =
+                    if (isHoliday) MaterialTheme.colorScheme.onTertiaryContainer
+                    else MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+          }
         }
       }
 
@@ -165,6 +198,12 @@ internal fun HomeScreen(
                   onClick = { onTodayClassClick(todayClass) },
               )
             }
+      }
+
+      // 考试倒计时：只有确实存在「今天及以后」的考试时才出现。数据未加载、加载失败或已经考完时整块消失，
+      // 不会留下空白卡，也不会因为考试接口慢而让首页转圈。
+      upcomingExam?.let { exam ->
+        item { HomeExamCountdownCard(upcomingExam = exam, onClick = onExamClick) }
       }
 
       item {
@@ -329,6 +368,96 @@ private fun HomeLoadingCard(title: String, subtitle: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
       }
+    }
+  }
+}
+
+/** 首页标题区的小标签，复用现有小标签样式，用于校历周次与中国节假日标记。 */
+@Composable
+private fun HomeMetaChip(
+    text: String,
+    containerColor: Color = MaterialTheme.colorScheme.primaryContainer,
+    contentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
+) {
+  Surface(color = containerColor, contentColor = contentColor, shape = MaterialTheme.shapes.small) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+    )
+  }
+}
+
+/**
+ * 首页考试倒计时卡片。
+ *
+ * 只有存在「今天及以后」的最近一场考试时才会被调用（见 [findUpcomingExam]），
+ * 因此这里不需要处理空数据或加载中状态；整卡可点，进入考试查询页。
+ */
+@Composable
+private fun HomeExamCountdownCard(upcomingExam: HomeUpcomingExam, onClick: () -> Unit) {
+  // 就是今天 / 明天 时用 errorContainer 强调，其余用首页常见的 primaryContainer。
+  val urgent = upcomingExam.daysUntil <= 1
+  Card(
+      modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+      elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+  ) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Text(
+            text = "考试倒计时",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Surface(
+            color =
+                if (urgent) MaterialTheme.colorScheme.errorContainer
+                else MaterialTheme.colorScheme.primaryContainer,
+            contentColor =
+                if (urgent) MaterialTheme.colorScheme.onErrorContainer
+                else MaterialTheme.colorScheme.onPrimaryContainer,
+            shape = MaterialTheme.shapes.small,
+        ) {
+          Text(
+              text = upcomingExam.countdownLabel,
+              style = MaterialTheme.typography.labelLarge,
+              fontWeight = FontWeight.Bold,
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+          )
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = "查看考试安排",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+
+      Text(
+          text = upcomingExam.courseName,
+          style = MaterialTheme.typography.titleMedium,
+          fontWeight = FontWeight.Bold,
+          maxLines = 2,
+          overflow = TextOverflow.Ellipsis,
+      )
+
+      Text(
+          text = upcomingExam.detailLabel,
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 2,
+          overflow = TextOverflow.Ellipsis,
+      )
     }
   }
 }
