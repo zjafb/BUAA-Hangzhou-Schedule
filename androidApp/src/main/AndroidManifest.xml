@@ -5,6 +5,10 @@
     <!-- Android 12+ 精确闹钟：未声明时 setExactAndAllowWhileIdle 会抛 SecurityException，
          只能退化到非精确闹钟，Doze/待机下提醒可能被推迟几十分钟甚至收不到。 -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- 本应用的核心功能就是课表 / 日程提醒（课前提醒 + 导出日历），因此同时声明 USE_EXACT_ALARM：
+         它在安装时即授予，用户不需要再去「闹钟和提醒」里手动授权，提醒才会准时。
+         （若日后要上架 Google Play，需按其政策改为只保留 SCHEDULE_EXACT_ALARM 并引导用户授权。） -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <!-- 开机后重新排课提醒与计划提醒：AlarmManager 的闹钟不会跨重启存活。 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 

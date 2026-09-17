@@ -36,8 +36,8 @@ import cn.edu.buaa.hzcampus.ui.common.util.BackHandlerCompat
 import cn.edu.buaa.hzcampus.ui.common.util.cancelClassReminders
 import cn.edu.buaa.hzcampus.ui.common.util.rememberOpenCampusGuide
 import cn.edu.buaa.hzcampus.ui.common.util.rememberOpenDingTalkSpaceReservation
-import cn.edu.buaa.hzcampus.ui.common.util.scheduleClassReminders
 import cn.edu.buaa.hzcampus.ui.common.util.schedulePlanReminders
+import cn.edu.buaa.hzcampus.ui.common.util.scheduleUpcomingClassReminders
 import cn.edu.buaa.hzcampus.ui.screens.classroom.ClassroomQueryScreen
 import cn.edu.buaa.hzcampus.ui.screens.classroom.ClassroomViewModel
 import cn.edu.buaa.hzcampus.ui.screens.evaluation.EvaluationScreen
@@ -203,7 +203,14 @@ fun MainAppScreen(
   val scheduleUiState by scheduleViewModel.uiState.collectAsState()
   val todayScheduleState by scheduleViewModel.todayScheduleState.collectAsState()
   LaunchedEffect(todayScheduleState.todayClasses, reminderAdvanceMinutes) {
-    runCatching { scheduleClassReminders(todayScheduleState.todayClasses, reminderAdvanceMinutes) }
+    // 一次排满未来一周（读本地课表，不联网），本地课表不可用时退回今天的在线课表。
+    runCatching {
+      scheduleUpcomingClassReminders(
+          advanceMinutes = reminderAdvanceMinutes,
+          fallbackTodayDate = homeNow.date.toString(),
+          fallbackTodayClasses = todayScheduleState.todayClasses,
+      )
+    }
   }
   LaunchedEffect(homeNow.date) {
     scheduleViewModel.loadTodaySchedule()

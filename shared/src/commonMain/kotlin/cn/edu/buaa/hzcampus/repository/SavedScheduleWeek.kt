@@ -1,6 +1,7 @@
 package cn.edu.buaa.hzcampus.repository
 
 import cn.edu.buaa.hzcampus.model.dto.CourseClass
+import cn.edu.buaa.hzcampus.model.dto.TodayClass
 import cn.edu.buaa.hzcampus.model.dto.Week
 import cn.edu.buaa.hzcampus.model.dto.WeeklySchedule
 import kotlinx.datetime.DateTimeUnit
@@ -34,6 +35,13 @@ fun selectSavedScheduleWeek(
 }
 
 data class SavedAgendaItem(val date: LocalDate, val course: CourseClass)
+
+/**
+ * 带日期的课程（`yyyy-MM-dd` + 课程），用于「未来若干天」的课前提醒排程。
+ *
+ * 与 [TodayClass] 的区别只在于多了一个确定的日期：提醒需要知道这节课是哪一天的同一时刻。
+ */
+data class DatedClass(val date: String, val course: TodayClass)
 
 /**
  * 已保存课表中覆盖 [today] 的周课表；[today] 不在任何周次范围内（含只有旧学期缓存的过期数据）时返回 null。

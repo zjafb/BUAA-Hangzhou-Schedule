@@ -22,8 +22,6 @@ actual fun schedulePlanReminders(tasks: List<PlanTask>) {
     cancelPlanReminders()
     createChannel(context)
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    // Android 12+ 未授权精确闹钟时只能退化为非精确闹钟（Doze 下可能被大幅延迟）。
-    val exactAllowed = canScheduleExactAlarms()
     val now = System.currentTimeMillis()
     tasks.forEachIndexed { index, task ->
       val remindAt = parsePlanReminderMillis(task.date, task.reminderAt) ?: return@forEachIndexed
@@ -37,27 +35,27 @@ actual fun schedulePlanReminders(tasks: List<PlanTask>) {
               intent,
               PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
           )
-      scheduleReminderAlarm(alarmManager, remindAt, pi, exactAllowed)
+      scheduleReminderAlarm(alarmManager, remindAt, pi)
     }
   }
 }
 
 /**
- * 尽量使用精确闹钟；未授权精确闹钟权限（Android 12+）或系统拒绝时， 保底退化为 [AlarmManager.setAndAllowWhileIdle] 的非精确闹钟，保证提醒仍然存在。
+ * 优先排**精确**闹钟，排不上再退化（与课程提醒同一策略）。
+ *
+ * 不预先查询 `canScheduleExactAlarms()`：它只反映 `SCHEDULE_EXACT_ALARM` 的 app-op，
+ * 应用声明了 `USE_EXACT_ALARM`（安装即授予）时仍可能返回 false，会把精确闹钟误降级。
  */
 private fun scheduleReminderAlarm(
     alarmManager: AlarmManager,
     triggerAtMillis: Long,
     operation: PendingIntent,
-    exactAllowed: Boolean,
 ) {
-  if (exactAllowed) {
-    try {
-      alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation)
-      return
-    } catch (_: SecurityException) {
-      // 权限在运行中被系统收回，落到下面的非精确闹钟。
-    }
+  try {
+    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation)
+    return
+  } catch (_: SecurityException) {
+    // 用户关闭了「闹钟和提醒」：退化为非精确闹钟，提醒仍会出现，只是可能被系统推迟。
   }
   alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, operation)
 }

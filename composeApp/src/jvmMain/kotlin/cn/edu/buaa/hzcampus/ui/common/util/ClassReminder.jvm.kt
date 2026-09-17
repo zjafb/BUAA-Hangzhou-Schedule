@@ -1,7 +1,7 @@
 package cn.edu.buaa.hzcampus.ui.common.util
 
-import cn.edu.buaa.hzcampus.model.dto.TodayClass
+import cn.edu.buaa.hzcampus.repository.DatedClass
 
-actual fun scheduleClassReminders(courses: List<TodayClass>, advanceMinutes: Int) {}
+actual fun scheduleClassReminders(classes: List<DatedClass>, advanceMinutes: Int) {}
 
 actual fun cancelClassReminders() {}

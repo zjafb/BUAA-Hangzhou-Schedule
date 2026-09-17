@@ -217,16 +217,34 @@ class ScheduleRepository(
         ?.filter { it.dayOfWeek == date.dayOfWeek.ordinal + 1 }
         .orEmpty()
         .sortedBy { it.beginTime ?: "" }
-        .map {
-          TodayClass(
-              it.courseName,
-              it.placeName,
-              listOfNotNull(it.beginTime, it.endTime).joinToString("-"),
-              it.courseName,
-              extractTeachers(it.weeksAndTeachers),
-          )
-        }
+        .map { it.toTodayClass() }
   }
+
+  /** 今天的日期（`yyyy-MM-dd`，按 Asia/Shanghai 计算），供提醒排程等离线场景使用。 */
+  fun todayIsoDate(): String = today().toString()
+
+  /**
+   * 未来 [days] 天（含今天）的全部课程，按日期与开始时间排序；数据全部来自本地已保存的课表，不联网。
+   *
+   * 课前提醒用它一次排满未来若干天：只排「今天」的话，连续几天不打开 App 的那些天就不会有提醒。
+   * 课表未本地化或缓存损坏时返回失败，调用方自行降级。
+   */
+  fun upcomingClasses(days: Int = 7): Result<List<DatedClass>> = runCatching {
+    require(days > 0) { "days 必须大于 0" }
+    val snapshots = saved()
+    check(snapshots.isNotEmpty()) { "尚未导入课表，请进入课表页点击课表本地化" }
+    savedAgenda(snapshots, today(), days).map { DatedClass(it.date.toString(), it.course.toTodayClass()) }
+  }
+
+  /** 把课表里的一门课转成提醒/首页使用的摘要 DTO。 */
+  private fun CourseClass.toTodayClass(): TodayClass =
+      TodayClass(
+          courseName,
+          placeName,
+          listOfNotNull(beginTime, endTime).joinToString("-"),
+          courseName,
+          extractTeachers(weeksAndTeachers),
+      )
 
   suspend fun update(code: String? = null): Result<SemesterSchedule> =
       updateMutex.withLock {
