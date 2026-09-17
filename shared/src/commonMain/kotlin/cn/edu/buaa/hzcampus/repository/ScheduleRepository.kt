@@ -98,7 +98,33 @@ class ScheduleRepository(
       onlineOrSaved(offlineOnly, { api.getWeeklySchedule(code, week) }, { weekly(code, week) })
 
   suspend fun loadTodayClasses(offlineOnly: Boolean = false): Result<List<TodayClass>> =
-      onlineOrSaved(offlineOnly, { api.getTodaySchedule() }, ::todayClasses)
+      onlineOrSaved(
+          offlineOnly,
+          { api.getTodaySchedule().mapCatching(::withSavedTeachers) },
+          ::todayClasses,
+      )
+
+  /**
+   * 在线今日摘要只有课程名、时间、地点，教师只存在于整学期课表的「周次/教师」字段里。
+   *
+   * 用已本地化且覆盖今天的周课表按「课程名 + 星期」补全缺失的教师；没有本地课表时原样返回，不联网，也不改变其它字段。
+   */
+  private fun withSavedTeachers(classes: List<TodayClass>): List<TodayClass> {
+    if (classes.isEmpty() || classes.all { it.teacher != null }) return classes
+    val owner = account() ?: return classes
+    val date = today()
+    val schedule =
+        runCatching { weeklyScheduleCovering(read(owner), date) }.getOrNull() ?: return classes
+    val day = date.dayOfWeek.ordinal + 1
+    val teachers =
+        schedule.arrangedList
+            .filter { it.dayOfWeek == day }
+            .mapNotNull { course ->
+              extractTeachers(course.weeksAndTeachers)?.let { course.courseName to it }
+            }
+            .toMap()
+    return classes.map { it.copy(teacher = it.teacher ?: teachers[it.bizName]) }
+  }
 
   private suspend fun <T> onlineOrSaved(
       offlineOnly: Boolean,
@@ -197,6 +223,7 @@ class ScheduleRepository(
               it.placeName,
               listOfNotNull(it.beginTime, it.endTime).joinToString("-"),
               it.courseName,
+              extractTeachers(it.weeksAndTeachers),
           )
         }
   }

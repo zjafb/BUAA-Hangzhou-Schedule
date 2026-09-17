@@ -49,6 +49,62 @@ class ScheduleRepositoryTest {
   }
 
   @Test
+  fun `online today summary borrows the teacher from the localized semester`() = runTest {
+    val today = LocalDate.parse("2026-09-07")
+    val course =
+        CourseClass(
+            "example",
+            "示例课程",
+            null,
+            null,
+            "08:00",
+            "09:35",
+            1,
+            2,
+            "示例教室",
+            "1-16周/张三",
+            null,
+            null,
+            1,
+        )
+    val saved =
+        listOf(
+            SemesterSchedule(
+                listOf(Term("20261", "示例学期", true, 0)),
+                "20261",
+                listOf(Week("2026-09-07", "2026-09-13", "20261", true, 1, "第1周")),
+                mapOf(1 to WeeklySchedule(listOf(course), "20261", "示例学期")),
+            )
+        )
+    var online = listOf(TodayClass("示例课程", "示例教室", "08:00-09:35", "示例课程"))
+    val backend =
+        object : ScheduleApiBackend {
+          override suspend fun getTerms(): Result<List<Term>> = error("unused")
+
+          override suspend fun getWeeks(termCode: String): Result<List<Week>> = error("unused")
+
+          override suspend fun getWeeklySchedule(
+              termCode: String,
+              week: Int,
+          ): Result<WeeklySchedule> = error("unused")
+
+          override suspend fun getTodaySchedule(): Result<List<TodayClass>> = Result.success(online)
+
+          override suspend fun getExamArrangement(termCode: String): Result<ExamArrangementData> =
+              error("unused")
+        }
+    fun repository(semesters: List<SemesterSchedule>) =
+        ScheduleRepository(ScheduleApi { backend }, { "A" }, { semesters }, { _, _ -> }, { today })
+    assertEquals("张三", repository(saved).loadTodayClasses().getOrThrow().single().teacher)
+    // 在线摘要自带教师时保留在线值；本地课表里没有同名课程时不猜教师。
+    online = listOf(TodayClass("示例课程", null, null, null, "在线教师"))
+    assertEquals("在线教师", repository(saved).loadTodayClasses().getOrThrow().single().teacher)
+    online = listOf(TodayClass("别的课", null, null, null))
+    assertNull(repository(saved).loadTodayClasses().getOrThrow().single().teacher)
+    assertNull(repository(emptyList()).loadTodayClasses().getOrThrow().single().teacher)
+  }
+
+  @Test
   fun `partial import cancellation and account switch never overwrite saved semester`() = runTest {
     var account = "A"
     val storage = mutableMapOf<String, List<SemesterSchedule>>()

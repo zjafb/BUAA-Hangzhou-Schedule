@@ -136,6 +136,7 @@ private constructor(
                   it.placeName,
                   "${it.beginTime}-${it.endTime}",
                   it.courseName,
+                  extractTeachers(it.weeksAndTeachers),
               )
             }
       }

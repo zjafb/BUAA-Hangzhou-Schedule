@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -79,6 +80,7 @@ internal fun HomeScreen(
     onPlanClick: (PlanTask) -> Unit,
     onPlanDelete: (PlanTask) -> Unit,
     onMailClick: () -> Unit,
+    onTodayClassClick: (TodayClass) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
   val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
@@ -150,7 +152,10 @@ internal fun HomeScreen(
             }
         sortedClasses.isEmpty() && !isLoading ->
             item { HomeEmptyCard(title = "今天没有课程安排", subtitle = "今天可以安心处理其他事项。") }
-        else -> items(sortedClasses) { todayClass -> TodayClassCard(todayClass = todayClass) }
+        else ->
+            items(sortedClasses) { todayClass ->
+              TodayClassCard(todayClass = todayClass, onClick = { onTodayClassClick(todayClass) })
+            }
       }
 
       item {
@@ -319,18 +324,40 @@ private fun HomeLoadingCard(title: String, subtitle: String) {
   }
 }
 
+/** 今日课程卡片；整卡可点，样式与课表点击入口一致地打开课程详情。 */
 @Composable
-private fun TodayClassCard(todayClass: TodayClass, modifier: Modifier = Modifier) {
+private fun TodayClassCard(
+    todayClass: TodayClass,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
   Card(
-      modifier = modifier.fillMaxWidth(),
+      modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
       colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
   ) {
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-      Text(
-          text = todayClass.bizName,
-          style = MaterialTheme.typography.titleMedium,
-          fontWeight = FontWeight.Bold,
-      )
+      Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Text(
+            text = todayClass.bizName,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.weight(1f),
+        )
+
+        todayClass.teacher?.let { teacher ->
+          Text(
+              text = teacher,
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              modifier = Modifier.widthIn(max = 140.dp).padding(start = 8.dp),
+          )
+        }
+      }
 
       Spacer(modifier = Modifier.height(8.dp))
 

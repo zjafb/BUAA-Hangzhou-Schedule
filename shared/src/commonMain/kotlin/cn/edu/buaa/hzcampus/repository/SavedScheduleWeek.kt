@@ -2,6 +2,7 @@ package cn.edu.buaa.hzcampus.repository
 
 import cn.edu.buaa.hzcampus.model.dto.CourseClass
 import cn.edu.buaa.hzcampus.model.dto.Week
+import cn.edu.buaa.hzcampus.model.dto.WeeklySchedule
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
@@ -33,6 +34,28 @@ fun selectSavedScheduleWeek(
 }
 
 data class SavedAgendaItem(val date: LocalDate, val course: CourseClass)
+
+/**
+ * 已保存课表中覆盖 [today] 的周课表；[today] 不在任何周次范围内（含只有旧学期缓存的过期数据）时返回 null。
+ *
+ * [selectSavedScheduleWeek] 会把范围外日期收敛到最近的周次，小组件需要这种行为，首页定位今天的课不需要。
+ */
+fun weeklyScheduleCovering(
+    semesters: List<SemesterSchedule>,
+    today: LocalDate,
+): WeeklySchedule? {
+  val saved = selectSavedScheduleWeek(semesters, today) ?: return null
+  if (today.toString() !in saved.week.startDate..saved.week.endDate) return null
+  return saved.semester.schedules[saved.week.serialNumber]
+}
+
+/** 首页点击今日课程时用已本地化课表兜底：只读当前账号的本地快照，不联网；没有本地数据或缓存损坏时为 null。 */
+fun savedWeeklyScheduleFor(today: LocalDate): WeeklySchedule? =
+    runCatching {
+          val account = ScheduleStore.account() ?: return@runCatching null
+          weeklyScheduleCovering(ScheduleStore.read(account), today)
+        }
+        .getOrNull()
 
 fun savedAgenda(
     semesters: List<SemesterSchedule>,

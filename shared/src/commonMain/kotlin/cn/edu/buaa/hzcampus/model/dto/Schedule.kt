@@ -141,6 +141,38 @@ fun scheduleSectionTimes(schedules: Collection<WeeklySchedule>): List<SectionTim
   }
 }
 
+/** 上游把周次与教师写在同一个字段里，这里去掉带数字的周次/节次片段（如 `1-16周`、`第1-2节`、`2,4周(单)`）。 */
+private val weekDescription = Regex("""第?\d[0-9,，、\-—~～.至到]*\s*[周节](?:[（(]?[单双][）)]?)?""")
+
+/** 周次与教师之间的分隔符；`,`、`、` 不在此列，它们同时用于分隔多个教师。 */
+private val teacherSeparators = Regex("""[\s/／|｜;；]+""")
+
+/**
+ * 从 [CourseClass.weeksAndTeachers] 中提取教师名。
+ *
+ * 上游把周次和教师塞进同一个字段，已确认的形式有：
+ * - 研究生 GSMIS／历史格式：`<周次> <教师>`，即 `ZCMC` 与 `JSXM` 用一个空格拼接，如 `"2,4周 教师甲,教师乙"`。
+ * - 只有教师：GSMIS 没有周次名称时该字段就是教师名，如 `"示例教师"`。
+ * - 本科教务常见形式：`"1-16周/张三"`、`"1-16周 张三"`、`"第1-16周（单）张三"`。
+ *
+ * 规则：按空白和 `/` 等分隔符切分，逐段删掉带数字的周次/节次描述，再丢掉只剩周次用字的片段，其余片段原样保留（多个教师继续沿用上游的 `,`、`、` 分隔）。无法确认教师时返回 null。
+ */
+fun extractTeachers(weeksAndTeachers: String?): String? =
+    weeksAndTeachers
+        ?.split(teacherSeparators)
+        ?.map { part -> part.replace(weekDescription, " ").trim(*teacherEdgeSeparators) }
+        ?.filter { it.isNotEmpty() && !isWeekWordOnly(it) }
+        ?.joinToString(" ")
+        ?.takeIf { it.isNotEmpty() }
+
+/** 去掉周次片段后可能留在首尾的分隔符。 */
+private val teacherEdgeSeparators =
+    charArrayOf(' ', '\t', ',', '，', '、', ';', '；', '/', '／', '|', '｜')
+
+/** 只由周次用字、数字和标点组成的片段（如 `第`、`单周`、`(周)`）是周次描述的残留，不是教师名。 */
+private fun isWeekWordOnly(part: String): Boolean =
+    part.all { it.isDigit() || it in "第周单双全节次上下" || it in "-—~～,，、.至到()（）[]【】" }
+
 /**
  * 今日课程摘要 DTO。
  *
@@ -148,6 +180,7 @@ fun scheduleSectionTimes(schedules: Collection<WeeklySchedule>): List<SectionTim
  * @property place 上课地点。
  * @property time 上课时间描述。
  * @property shortName 课程简称。
+ * @property teacher 授课教师；由课表数据的「周次/教师」字段提取，旧缓存或上游缺失时为 null。
  */
 @Serializable
 data class TodayClass(
@@ -155,6 +188,7 @@ data class TodayClass(
     val place: String?,
     val time: String?,
     val shortName: String?,
+    val teacher: String? = null,
 )
 
 /** 上游 API 学期列表响应包装类。 */

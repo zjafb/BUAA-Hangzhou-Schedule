@@ -72,4 +72,33 @@ class SavedScheduleWeekTest {
     assertNull(selectSavedScheduleWeek(emptyList(), today))
     assertNull(selectSavedScheduleWeek(listOf(semester.copy(weeks = emptyList())), today))
   }
+
+  @Test
+  fun homeClickFallbackOnlyUsesTheWeekCoveringToday() {
+    val weeks =
+        listOf(
+            Week("2026-09-07", "2026-09-13", "20261", false, 1, "第1周"),
+            Week("2026-09-14", "2026-09-20", "20261", false, 2, "第2周"),
+        )
+    val semester =
+        SemesterSchedule(
+            emptyList(),
+            "20261",
+            weeks,
+            mapOf(
+                1 to WeeklySchedule(emptyList(), "20261", "第1周"),
+                2 to WeeklySchedule(emptyList(), "20261", "第2周"),
+            ),
+        )
+    val data = listOf(semester)
+    assertEquals(semester.schedules[2], weeklyScheduleCovering(data, LocalDate.parse("2026-09-15")))
+    // 小组件会把范围外日期收敛到最近的周次，首页定位今天的课不能这样兜底。
+    assertEquals(
+        2,
+        selectSavedScheduleWeek(data, LocalDate.parse("2026-09-28"))?.week?.serialNumber,
+    )
+    assertNull(weeklyScheduleCovering(data, LocalDate.parse("2026-09-28")))
+    assertNull(weeklyScheduleCovering(data, LocalDate.parse("2026-09-01")))
+    assertNull(weeklyScheduleCovering(emptyList(), LocalDate.parse("2026-09-15")))
+  }
 }

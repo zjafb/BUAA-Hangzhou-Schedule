@@ -22,9 +22,12 @@ import cn.edu.buaa.hzcampus.api.storage.PlanStore
 import cn.edu.buaa.hzcampus.api.storage.ReminderStore
 import cn.edu.buaa.hzcampus.model.dto.CourseClass
 import cn.edu.buaa.hzcampus.model.dto.PlanTask
+import cn.edu.buaa.hzcampus.model.dto.TodayClass
 import cn.edu.buaa.hzcampus.model.dto.UserData
 import cn.edu.buaa.hzcampus.model.dto.UserInfo
+import cn.edu.buaa.hzcampus.model.dto.WeeklySchedule
 import cn.edu.buaa.hzcampus.model.dto.scheduleSectionTimes
+import cn.edu.buaa.hzcampus.repository.savedWeeklyScheduleFor
 import cn.edu.buaa.hzcampus.ui.common.components.AppTopBar
 import cn.edu.buaa.hzcampus.ui.common.components.BottomNavTab
 import cn.edu.buaa.hzcampus.ui.common.components.BottomNavigation
@@ -362,6 +365,33 @@ fun MainAppScreen(
     navigateTo(AppScreen.JUDGE_ASSIGNMENT_DETAIL)
   }
 
+  /**
+   * 首页点击今日课程：首页只有今日摘要，课程详情页需要周课表里的 [CourseClass]。
+   *
+   * 先在已加载的周课表中按「课程名 + 今天星期几」定位同一门课；内存里还没有周课表（刚进首页）时再用已本地化的整学期课表兜底，不联网。都定位不到时什么都不做。
+   */
+  fun openTodayClassDetail(todayClass: TodayClass) {
+    val currentWeek =
+        scheduleUiState.currentWeek?.serialNumber
+            ?: scheduleUiState.weeks.firstOrNull { it.curWeek }?.serialNumber
+    val loaded =
+        homeWeekSchedules(
+            currentWeek = currentWeek,
+            weekSchedules = scheduleUiState.weekSchedules,
+            weeklySchedule = scheduleUiState.weeklySchedule,
+        )
+    val course =
+        findCourseForTodayClass(todayClass, loaded, homeNow.date.dayOfWeek.ordinal + 1)
+            ?: findCourseForTodayClass(
+                todayClass,
+                listOfNotNull(savedWeeklyScheduleFor(homeNow.date)),
+                homeNow.date.dayOfWeek.ordinal + 1,
+            )
+            ?: return
+    selectedCourse = course
+    navigateTo(AppScreen.COURSE_DETAIL)
+  }
+
   fun handleHomeTodoClick(todoItem: HomeTodoItem) {
     when (val action = todoItem.action) {
       is HomeTodoAction.OpenJudgeAssignment ->
@@ -561,6 +591,7 @@ fun MainAppScreen(
                   onPlanClick = { task -> openPlanEditor(task, null, null, null) },
                   onPlanDelete = { task -> requestPlanDelete(task) },
                   onMailClick = { navigateTo(AppScreen.MAIL) },
+                  onTodayClassClick = { todayClass -> openTodayClassDetail(todayClass) },
               )
           AppScreen.REGULAR ->
               RegularFeaturesScreen(
@@ -837,4 +868,40 @@ private fun JudgeSortFilterDialog(
       },
       confirmButton = { TextButton(onClick = onDismiss) { Text("完成") } },
   )
+}
+
+/**
+ * 首页点击今日课程时使用的候选周课表：当前周优先，其次是正在浏览的周，最后是其他已加载的周。
+ *
+ * 顺序只影响同名课程的去重选择，避免把其他周的同名课程当成今天的课。
+ */
+private fun homeWeekSchedules(
+    currentWeek: Int?,
+    weekSchedules: Map<Int, WeeklySchedule>,
+    weeklySchedule: WeeklySchedule?,
+): List<WeeklySchedule> =
+    buildList {
+          currentWeek?.let { number -> weekSchedules[number]?.let { add(it) } }
+          weeklySchedule?.let { add(it) }
+          addAll(weekSchedules.entries.sortedBy { it.key }.map { it.value })
+        }
+        .distinct()
+
+/**
+ * 在首页已加载的周课表中为今日课程摘要定位 [CourseClass]，供课程详情页使用。
+ *
+ * 首页只有今日摘要，没有详情页需要的课程代码、节次和学分。依次尝试：课程名 + 星期 + 开始时间 → 课程名 + 星期 → 课程名（任意周）。全部失败时返回 null，调用方保持原状，不弹错误。
+ */
+internal fun findCourseForTodayClass(
+    todayClass: TodayClass,
+    schedules: List<WeeklySchedule>,
+    dayOfWeek: Int,
+): CourseClass? {
+  val courses = schedules.flatMap { it.arrangedList }
+  if (courses.isEmpty()) return null
+  val sameName = courses.filter { it.courseName == todayClass.bizName }
+  val beginTime = todayClass.time?.substringBefore('-')?.trim()?.takeIf { it.isNotEmpty() }
+  return sameName.firstOrNull { it.dayOfWeek == dayOfWeek && it.beginTime == beginTime }
+      ?: sameName.firstOrNull { it.dayOfWeek == dayOfWeek }
+      ?: sameName.firstOrNull()
 }
