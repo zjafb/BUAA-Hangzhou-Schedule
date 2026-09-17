@@ -388,10 +388,7 @@ class JudgeViewModel(
     return runCatching { LocalDateTime.parse(normalized) }.getOrNull()
   }
 
-  /**
-   * 摘要阶段的「未完成」判定：除已提交外都算未完成。
-   * 摘要在详情补全之前状态为 UNKNOWN，若把它排除会让列表和待办区先空一阵再突然出现。
-   */
+  /** 摘要阶段的「未完成」判定：除已提交外都算未完成。 摘要在详情补全之前状态为 UNKNOWN，若把它排除会让列表和待办区先空一阵再突然出现。 */
   private fun JudgeAssignmentSummaryDto.isUnfinished(): Boolean =
       submissionStatus != JudgeSubmissionStatus.SUBMITTED
 

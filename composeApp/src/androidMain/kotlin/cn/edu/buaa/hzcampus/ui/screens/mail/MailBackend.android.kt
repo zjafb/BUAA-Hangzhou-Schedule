@@ -186,10 +186,7 @@ private object AndroidMailBackend : MailBackend {
         ?.setFlag(Flags.Flag.SEEN, seen)
   }
 
-  /**
-   * 标记 \Deleted 后立即 expunge，把邮件真正从收件箱移除。
-   * 优先用 UID 直接定位，避免遍历整个文件夹；返回是否真的删除了邮件。
-   */
+  /** 标记 \Deleted 后立即 expunge，把邮件真正从收件箱移除。 优先用 UID 直接定位，避免遍历整个文件夹；返回是否真的删除了邮件。 */
   private fun deleteByUid(folder: Folder, uid: String): Boolean {
     val uidFolder = folder as UIDFolder
     val targetUid = uid.toLongOrNull()

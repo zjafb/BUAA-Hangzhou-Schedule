@@ -13,10 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/**
- * 已本地化的学期浏览时一律先用本地数据秒开，联网刷新在后台静默进行；
- * 没有本地数据（或离线入口）时仍然在线加载。只有用户手动本地化才写整学期。
- */
+/** 已本地化的学期浏览时一律先用本地数据秒开，联网刷新在后台静默进行； 没有本地数据（或离线入口）时仍然在线加载。只有用户手动本地化才写整学期。 */
 class ScheduleViewModel(
     scheduleApi: ScheduleApi = ScheduleApi(),
     private val repository: ScheduleRepository = ScheduleRepository(scheduleApi),
@@ -65,7 +62,8 @@ class ScheduleViewModel(
                       ?.let { term -> repository.weeks(term.itemCode).getOrNull() }
           if (savedWeeks != null) {
             if (generation != request) return@launch
-            _uiState.value = _uiState.value.copy(currentWeek = savedWeeks.firstOrNull { it.curWeek })
+            _uiState.value =
+                _uiState.value.copy(currentWeek = savedWeeks.firstOrNull { it.curWeek })
             currentWeekLoadedOnce = true
             return@launch
           }
@@ -267,10 +265,7 @@ class ScheduleViewModel(
             it.term == _uiState.value.selectedWeek?.term
       } ?: weeks.firstOrNull { it.curWeek } ?: weeks.firstOrNull()
 
-  /**
-   * 周课表缓存：本地化数据用于秒开，内存中新拉到的结果优先；
-   * 强制刷新时丢弃当前周，保证手动刷新真的重新拉取。
-   */
+  /** 周课表缓存：本地化数据用于秒开，内存中新拉到的结果优先； 强制刷新时丢弃当前周，保证手动刷新真的重新拉取。 */
   private fun weekScheduleCache(
       term: Term,
       selected: Week?,

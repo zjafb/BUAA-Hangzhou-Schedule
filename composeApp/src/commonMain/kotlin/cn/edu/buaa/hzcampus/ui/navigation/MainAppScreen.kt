@@ -186,9 +186,7 @@ fun MainAppScreen(
   val scheduleUiState by scheduleViewModel.uiState.collectAsState()
   val todayScheduleState by scheduleViewModel.todayScheduleState.collectAsState()
   LaunchedEffect(todayScheduleState.todayClasses, reminderAdvanceMinutes) {
-    runCatching {
-      scheduleClassReminders(todayScheduleState.todayClasses, reminderAdvanceMinutes)
-    }
+    runCatching { scheduleClassReminders(todayScheduleState.todayClasses, reminderAdvanceMinutes) }
   }
   LaunchedEffect(homeNow.date) {
     scheduleViewModel.loadTodaySchedule()

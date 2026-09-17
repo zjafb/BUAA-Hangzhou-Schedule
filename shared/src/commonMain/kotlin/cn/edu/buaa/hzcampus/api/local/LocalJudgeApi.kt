@@ -78,8 +78,7 @@ internal class LocalJudgeApiBackend(
   /**
    * 只返回作业摘要（课程列表 + 各课程作业列表），不再逐个作业拉详情。
    *
-   * 逐作业拉详情会让首页待办区长时间停留在 loading；状态与时间由调用方通过
-   * [getAssignmentDetails] 在后台批量补全，摘要一拿到就可以结束加载。
+   * 逐作业拉详情会让首页待办区长时间停留在 loading；状态与时间由调用方通过 [getAssignmentDetails] 在后台批量补全，摘要一拿到就可以结束加载。
    */
   private suspend fun LocalJudgeClient.getAssignmentsResponse(
       includeExpired: Boolean,
@@ -187,9 +186,10 @@ internal class LocalJudgeApiBackend(
   /** 记录出现半年前作业的课程，后续摘要查询可直接跳过这些历史课程。 */
   private fun LocalJudgeClient.rememberHistoricalCourses(details: List<JudgeAssignmentDetailDto>) {
     val cutoffCourseIds =
-        details.filter { it.startedBeforeSixMonthCutoff() }.map { it.courseId }.filter {
-          it.isNotBlank()
-        }
+        details
+            .filter { it.startedBeforeSixMonthCutoff() }
+            .map { it.courseId }
+            .filter { it.isNotBlank() }
     if (cutoffCourseIds.isEmpty()) return
     LocalJudgeHistoricalCourseStore.add(
         mode = cacheScope.mode,
@@ -272,10 +272,7 @@ private class LocalJudgeClient(
     }
   }
 
-  /**
-   * 同一课程下并发拉取多个作业详情：课程只选择一次，避免每个作业都重复选择课程。
-   * 并发过程中会话若失效，重新选择课程后重试一次。
-   */
+  /** 同一课程下并发拉取多个作业详情：课程只选择一次，避免每个作业都重复选择课程。 并发过程中会话若失效，重新选择课程后重试一次。 */
   suspend fun getCourseAssignmentDetails(
       course: LocalJudgeCourseRaw,
       assignmentIds: List<String>,

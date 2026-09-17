@@ -347,9 +347,7 @@ fun MailScreen(modifier: Modifier = Modifier, onMailChanged: () -> Unit = {}) {
               else "确定删除选中的 ${pending.uids.size} 封邮件吗？删除后将从服务器收件箱移除。"
           )
         },
-        confirmButton = {
-          TextButton(onClick = { deleteMessages(pending.uids) }) { Text("删除") }
-        },
+        confirmButton = { TextButton(onClick = { deleteMessages(pending.uids) }) { Text("删除") } },
         dismissButton = { TextButton(onClick = { pendingDeletion = null }) { Text("取消") } },
     )
   }
@@ -375,8 +373,7 @@ private fun MailMessageRow(
 ) {
   Surface(
       modifier =
-          Modifier.fillMaxWidth()
-              .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+          Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
       shape = MaterialTheme.shapes.medium,
       color =
           if (selected) MaterialTheme.colorScheme.primaryContainer
