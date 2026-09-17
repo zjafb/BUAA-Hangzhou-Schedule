@@ -25,7 +25,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Refresh
@@ -244,8 +243,8 @@ fun MailScreen(modifier: Modifier = Modifier, onMailChanged: () -> Unit = {}) {
           Icon(Icons.Default.DoneAll, null)
           Text("一键已读")
         }
-        IconButton(onClick = { selectionMode = true }, enabled = messages.isNotEmpty()) {
-          Icon(Icons.Default.Check, "多选（批量删除）")
+        TextButton(onClick = { selectionMode = true }, enabled = messages.isNotEmpty()) {
+          Text("删除")
         }
         IconButton(onClick = { refresh() }, enabled = !loading && !deleting) {
           Icon(Icons.Default.Refresh, "刷新")
@@ -264,7 +263,7 @@ fun MailScreen(modifier: Modifier = Modifier, onMailChanged: () -> Unit = {}) {
     }
     if (!selectionMode && messages.isNotEmpty()) {
       Text(
-          text = "提示：长按邮件或用右上角「多选」可删除邮件；点开邮件后也能在详情里删除。",
+          text = "提示：长按邮件、点右上角「删除」进入批量删除，或点开邮件在详情里删除。",
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
           modifier = Modifier.padding(bottom = 4.dp),

@@ -120,6 +120,7 @@ fun MainAppScreen(
   // 今日计划
   var planTasks by remember { mutableStateOf(PlanStore.list()) }
   var planEdit by remember { mutableStateOf<PlanEditRequest?>(null) }
+  var planDeleteCandidate by remember { mutableStateOf<PlanTask?>(null) }
 
   // 计划增删改后同步计划提醒闹钟。
   LaunchedEffect(planTasks) { runCatching { schedulePlanReminders(planTasks) } }
@@ -130,6 +131,11 @@ fun MainAppScreen(
 
   fun openPlanEditor(existing: PlanTask?, date: String?, start: String?, end: String?) {
     planEdit = PlanEditRequest(existing, date, start, end)
+  }
+
+  /** 长按计划块后先弹出删除确认，确认后再落库删除。 */
+  fun requestPlanDelete(task: PlanTask) {
+    planDeleteCandidate = task
   }
 
   fun refreshMailUnread() {
@@ -553,6 +559,7 @@ fun MainAppScreen(
                   onTodoClick = { todoItem -> handleHomeTodoClick(todoItem) },
                   onAddPlanClick = { openPlanEditor(null, homeNow.date.toString(), null, null) },
                   onPlanClick = { task -> openPlanEditor(task, null, null, null) },
+                  onPlanDelete = { task -> requestPlanDelete(task) },
                   onMailClick = { navigateTo(AppScreen.MAIL) },
               )
           AppScreen.REGULAR ->
@@ -616,6 +623,7 @@ fun MainAppScreen(
                   },
                   planTasks = planTasks,
                   onPlanClick = { task -> openPlanEditor(task, null, null, null) },
+                  onPlanLongClick = { task -> requestPlanDelete(task) },
               )
           AppScreen.EXAM -> examViewModel?.let { ExamScreen(viewModel = it) }
           AppScreen.GRADE -> gradeViewModel?.let { GradeScreen(viewModel = it) }
@@ -733,6 +741,28 @@ fun MainAppScreen(
             planTasks = PlanStore.list()
           },
           todayClasses = todayScheduleState.todayClasses,
+      )
+    }
+
+    planDeleteCandidate?.let { task ->
+      AlertDialog(
+          onDismissRequest = { planDeleteCandidate = null },
+          title = { Text("删除计划") },
+          text = { Text("确定要删除计划「${task.title}」吗？删除后无法恢复。") },
+          confirmButton = {
+            TextButton(
+                onClick = {
+                  PlanStore.delete(task.id)
+                  planTasks = PlanStore.list()
+                  planDeleteCandidate = null
+                }
+            ) {
+              Text("删除")
+            }
+          },
+          dismissButton = {
+            TextButton(onClick = { planDeleteCandidate = null }) { Text("取消") }
+          },
       )
     }
 

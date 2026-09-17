@@ -1,7 +1,9 @@
 package cn.edu.buaa.hzcampus.ui.screens.menu
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -75,6 +77,7 @@ internal fun HomeScreen(
     onTodoClick: (HomeTodoItem) -> Unit,
     onAddPlanClick: () -> Unit,
     onPlanClick: (PlanTask) -> Unit,
+    onPlanDelete: (PlanTask) -> Unit,
     onMailClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -156,19 +159,35 @@ internal fun HomeScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-          Text(
-              text = "今日计划",
-              style = MaterialTheme.typography.titleLarge,
-              fontWeight = FontWeight.Bold,
-          )
+          Row(
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text(
+                text = "今日计划",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "长按可删除",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
           IconButton(onClick = onAddPlanClick) { Icon(Icons.Default.Add, "添加计划") }
         }
       }
 
       if (todayPlanTasks.isEmpty()) {
-        item { HomeEmptyCard(title = "今天还没有计划", subtitle = "点击右上角 + 添加一条计划") }
+        item { HomeEmptyCard(title = "今天还没有计划", subtitle = "点击右上角 + 添加一条计划，长按计划可删除") }
       } else {
-        items(todayPlanTasks) { task -> PlanCard(task = task, onClick = { onPlanClick(task) }) }
+        items(todayPlanTasks) { task ->
+          PlanCard(
+              task = task,
+              onClick = { onPlanClick(task) },
+              onLongClick = { onPlanDelete(task) },
+          )
+        }
       }
 
       item {
@@ -571,10 +590,13 @@ private fun sourceIcon(source: HomeTodoSource): ImageVector =
       HomeTodoSource.JUDGE -> Icons.Default.Code
     }
 
+/** 首页计划卡片。单击进入编辑，长按触发删除确认。 */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PlanCard(task: PlanTask, onClick: () -> Unit) {
+private fun PlanCard(task: PlanTask, onClick: () -> Unit, onLongClick: () -> Unit = {}) {
   Card(
-      modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+      modifier =
+          Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
       colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
       elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
   ) {

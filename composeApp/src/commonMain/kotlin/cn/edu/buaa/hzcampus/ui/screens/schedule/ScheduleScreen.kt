@@ -1,8 +1,10 @@
 package cn.edu.buaa.hzcampus.ui.screens.schedule
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -192,6 +194,9 @@ fun OfflineScheduleScreen(
  * @param onWeekSelected 周次选择回调。
  * @param onNavigateBack 返回上一级页面的回调。
  * @param onCourseClick 点击课程单元格的回调。
+ * @param planTasks 当前需要在课表网格中展示的计划任务。
+ * @param onPlanClick 点击计划块的编辑回调。
+ * @param onPlanLongClick 长按计划块的删除回调。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -209,6 +214,7 @@ fun ScheduleScreen(
     onCourseClick: (CourseClass) -> Unit,
     planTasks: List<PlanTask> = emptyList(),
     onPlanClick: (PlanTask) -> Unit = {},
+    onPlanLongClick: (PlanTask) -> Unit = {},
     modifier: Modifier = Modifier,
     onEmptySlotClick: ((dayOfWeek: Int, section: Int) -> Unit)? = null,
     isUpdating: Boolean = false,
@@ -348,6 +354,7 @@ fun ScheduleScreen(
                   onEmptySlotClick,
                   planTasks,
                   onPlanClick,
+                  onPlanLongClick,
               )
             }
           }
@@ -391,6 +398,7 @@ internal fun ScheduleWeekPager(
     onEmptySlotClick: ((Int, Int) -> Unit)? = null,
     planTasks: List<PlanTask> = emptyList(),
     onPlanClick: (PlanTask) -> Unit = {},
+    onPlanLongClick: (PlanTask) -> Unit = {},
 ) {
   val index = weeks.indexOfFirst { it.serialNumber == selectedWeek.serialNumber }.coerceAtLeast(0)
   val pager = rememberPagerState(initialPage = index, pageCount = { weeks.size })
@@ -427,6 +435,7 @@ internal fun ScheduleWeekPager(
             onEmptySlotClick = onEmptySlotClick,
             planCells = planTasks.mapNotNull { planTaskToCell(it, week, times) },
             onPlanClick = onPlanClick,
+            onPlanLongClick = onPlanLongClick,
         )
     else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("此周课表尚未加载") }
   }
@@ -529,6 +538,7 @@ private fun WeeklyScheduleView(
     onEmptySlotClick: ((Int, Int) -> Unit)? = null,
     planCells: List<PlanCell> = emptyList(),
     onPlanClick: (PlanTask) -> Unit = {},
+    onPlanLongClick: (PlanTask) -> Unit = {},
 ) {
   val totalPeriods = times.size
   val rowHeight: Dp = 64.dp
@@ -556,6 +566,7 @@ private fun WeeklyScheduleView(
           onEmptySlotClick,
           planCells,
           onPlanClick,
+          onPlanLongClick,
       )
     }
   }
@@ -628,6 +639,7 @@ private fun WeeklyScheduleGrid(
     onEmptySlotClick: ((Int, Int) -> Unit)? = null,
     planCells: List<PlanCell> = emptyList(),
     onPlanClick: (PlanTask) -> Unit = {},
+    onPlanLongClick: (PlanTask) -> Unit = {},
 ) {
   val totalDays = 7
   val gridColor = MaterialTheme.colorScheme.onSurface.copy(0.1f)
@@ -692,6 +704,7 @@ private fun WeeklyScheduleGrid(
         PlanTaskCell(
             cell,
             { onPlanClick(cell.task) },
+            { onPlanLongClick(cell.task) },
             Modifier.offset(cellWidth * dayIndex, rowHeight * startIdx)
                 .size(cellWidth, rowHeight * span)
                 .padding(1.dp),
@@ -701,12 +714,19 @@ private fun WeeklyScheduleGrid(
   }
 }
 
-/** 计划任务单元格。 */
+/** 计划任务单元格。单击进入编辑，长按触发删除确认。 */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PlanTaskCell(cell: PlanCell, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun PlanTaskCell(
+    cell: PlanCell,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
   val color = remember(cell.task.color) { Color(cell.task.color.toInt()) }
   Card(
-      modifier = modifier.fillMaxSize().clickable { onClick() },
+      modifier =
+          modifier.fillMaxSize().combinedClickable(onClick = onClick, onLongClick = onLongClick),
       shape = RoundedCornerShape(6.dp),
       colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.85f)),
   ) {
