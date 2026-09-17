@@ -226,14 +226,15 @@ class ScheduleRepository(
   /**
    * 未来 [days] 天（含今天）的全部课程，按日期与开始时间排序；数据全部来自本地已保存的课表，不联网。
    *
-   * 课前提醒用它一次排满未来若干天：只排「今天」的话，连续几天不打开 App 的那些天就不会有提醒。
-   * 课表未本地化或缓存损坏时返回失败，调用方自行降级。
+   * 课前提醒用它一次排满未来若干天：只排「今天」的话，连续几天不打开 App 的那些天就不会有提醒。 课表未本地化或缓存损坏时返回失败，调用方自行降级。
    */
   fun upcomingClasses(days: Int = 7): Result<List<DatedClass>> = runCatching {
     require(days > 0) { "days 必须大于 0" }
     val snapshots = saved()
     check(snapshots.isNotEmpty()) { "尚未导入课表，请进入课表页点击课表本地化" }
-    savedAgenda(snapshots, today(), days).map { DatedClass(it.date.toString(), it.course.toTodayClass()) }
+    savedAgenda(snapshots, today(), days).map {
+      DatedClass(it.date.toString(), it.course.toTodayClass())
+    }
   }
 
   /** 把课表里的一门课转成提醒/首页使用的摘要 DTO。 */

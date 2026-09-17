@@ -52,9 +52,8 @@ actual fun scheduleClassReminders(classes: List<DatedClass>, advanceMinutes: Int
 /**
  * 优先排**精确**闹钟，排不上再退化。
  *
- * 这里不再预先查询 `canScheduleExactAlarms()`：它只反映 `SCHEDULE_EXACT_ALARM` 的 app-op，
- * 在本应用声明了 `USE_EXACT_ALARM`（安装即授予）的情况下仍可能返回 false，从而把精确闹钟误降级成
- * 有 1 小时窗口的非精确闹钟（Doze 下提醒会被推迟）。改为直接尝试，未授权时
+ * 这里不再预先查询 `canScheduleExactAlarms()`：它只反映 `SCHEDULE_EXACT_ALARM` 的 app-op， 在本应用声明了
+ * `USE_EXACT_ALARM`（安装即授予）的情况下仍可能返回 false，从而把精确闹钟误降级成 有 1 小时窗口的非精确闹钟（Doze 下提醒会被推迟）。改为直接尝试，未授权时
  * `setExactAndAllowWhileIdle` 会抛 [SecurityException]，再保底用非精确闹钟。
  */
 private fun scheduleReminderAlarm(

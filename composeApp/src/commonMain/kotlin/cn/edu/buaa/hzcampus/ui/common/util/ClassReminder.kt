@@ -25,7 +25,8 @@ fun scheduleUpcomingClassReminders(
     fallbackTodayClasses: List<TodayClass>,
 ) {
   val upcoming =
-      runCatching { ScheduleRepository().upcomingClasses(CLASS_REMINDER_DAYS).getOrNull() }.getOrNull()
+      runCatching { ScheduleRepository().upcomingClasses(CLASS_REMINDER_DAYS).getOrNull() }
+          .getOrNull()
   if (!upcoming.isNullOrEmpty()) {
     scheduleClassReminders(upcoming, advanceMinutes)
     return

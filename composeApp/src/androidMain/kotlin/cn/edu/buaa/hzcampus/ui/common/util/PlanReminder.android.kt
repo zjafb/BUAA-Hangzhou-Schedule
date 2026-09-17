@@ -43,8 +43,8 @@ actual fun schedulePlanReminders(tasks: List<PlanTask>) {
 /**
  * 优先排**精确**闹钟，排不上再退化（与课程提醒同一策略）。
  *
- * 不预先查询 `canScheduleExactAlarms()`：它只反映 `SCHEDULE_EXACT_ALARM` 的 app-op，
- * 应用声明了 `USE_EXACT_ALARM`（安装即授予）时仍可能返回 false，会把精确闹钟误降级。
+ * 不预先查询 `canScheduleExactAlarms()`：它只反映 `SCHEDULE_EXACT_ALARM` 的 app-op， 应用声明了
+ * `USE_EXACT_ALARM`（安装即授予）时仍可能返回 false，会把精确闹钟误降级。
  */
 private fun scheduleReminderAlarm(
     alarmManager: AlarmManager,

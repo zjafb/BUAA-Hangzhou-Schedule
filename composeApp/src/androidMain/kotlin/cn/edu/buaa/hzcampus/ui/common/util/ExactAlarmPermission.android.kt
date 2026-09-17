@@ -13,12 +13,11 @@ private const val USE_EXACT_ALARM = "android.permission.USE_EXACT_ALARM"
 
 /**
  * 是否可以使用精确闹钟。
- *
  * - API 31 以下没有这个开关，始终可用。
- * - API 33 起应用声明了 `USE_EXACT_ALARM`（本应用的课表/课前提醒属于该权限的适用场景）时安装即授予，
- *   此时系统允许 `setExactAndAllowWhileIdle`；但 `AlarmManager.canScheduleExactAlarms()` 只反映
- *   `SCHEDULE_EXACT_ALARM` 的 app-op，仍可能是 `default` 而返回 false。因此这里以权限为准，
- *   否则会误判成「未授权」而退化到非精确闹钟（Doze 下推迟几十分钟）。
+ * - API 33 起应用声明了 `USE_EXACT_ALARM`（本应用的课表/课前提醒属于该权限的适用场景）时安装即授予， 此时系统允许
+ *   `setExactAndAllowWhileIdle`；但 `AlarmManager.canScheduleExactAlarms()` 只反映
+ *   `SCHEDULE_EXACT_ALARM` 的 app-op，仍可能是 `default` 而返回 false。因此这里以权限为准， 否则会误判成「未授权」而退化到非精确闹钟（Doze
+ *   下推迟几十分钟）。
  * - 其余情况回落到 `canScheduleExactAlarms()`，用户可在系统「闹钟和提醒」里手动授权。
  */
 private fun canScheduleExactAlarms(context: Context): Boolean {
