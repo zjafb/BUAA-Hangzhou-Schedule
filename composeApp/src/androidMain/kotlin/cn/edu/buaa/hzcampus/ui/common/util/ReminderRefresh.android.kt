@@ -32,7 +32,10 @@ internal fun rescheduleAllReminders() {
     // 本地课表不可用（尚未本地化 / 缓存损坏）：退回「今天」的课表，取不到就只清掉旧闹钟。
     val today = runCatching { repository.todayIsoDate() }.getOrNull()
     val classes = runCatching { repository.todayClasses().getOrNull() }.getOrNull().orEmpty()
-    scheduleClassReminders(classes.mapNotNull { today?.let { date -> DatedClass(date, it) } }, advance)
+    scheduleClassReminders(
+        classes.mapNotNull { today?.let { date -> DatedClass(date, it) } },
+        advance,
+    )
   }
   schedulePlanReminders(runCatching { PlanStore.list() }.getOrNull().orEmpty())
   AppContextHolder.context?.let { runCatching { scheduleDailyReminderRefresh(it) } }
@@ -41,8 +44,7 @@ internal fun rescheduleAllReminders() {
 /**
  * 预约下一次每日自维护。
  *
- * 课表提醒一次只排未来一周，而且闹钟在关机、覆盖安装时都会被系统清掉。有了这个每天触发一次的
- * 闹钟，即使长期不打开 App，提醒也会自动续排，不会出现「一周后突然不再提醒」的情况。
+ * 课表提醒一次只排未来一周，而且闹钟在关机、覆盖安装时都会被系统清掉。有了这个每天触发一次的 闹钟，即使长期不打开 App，提醒也会自动续排，不会出现「一周后突然不再提醒」的情况。
  */
 internal fun scheduleDailyReminderRefresh(context: Context) {
   val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
