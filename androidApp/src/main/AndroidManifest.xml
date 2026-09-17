@@ -47,9 +47,12 @@
         </provider>
         <receiver android:name="cn.edu.buaa.hzcampus.ui.common.util.ClassReminderReceiver" android:exported="false" />
         <receiver android:name="cn.edu.buaa.hzcampus.ui.common.util.PlanReminderReceiver" android:exported="false" />
+        <receiver android:name="cn.edu.buaa.hzcampus.ui.common.util.DailyReminderRefreshReceiver" android:exported="false" />
         <receiver android:name="cn.edu.buaa.hzcampus.ui.common.util.BootReminderReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <!-- 覆盖安装（APK 升级）同样会清掉本应用的闹钟，这里一并重排，用户不必先打开一次 App。 -->
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
         <activity android:name="cn.edu.buaa.hzcampus.widget.ScheduleWidgetActivity" android:exported="false" />

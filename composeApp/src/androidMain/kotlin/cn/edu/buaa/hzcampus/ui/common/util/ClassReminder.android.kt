@@ -46,6 +46,8 @@ actual fun scheduleClassReminders(classes: List<DatedClass>, advanceMinutes: Int
           )
       scheduleReminderAlarm(alarmManager, remindAt, pi)
     }
+    // 顺便预约每天一次的自维护：长期不打开 App 也能持续排上未来一周的提醒。
+    scheduleDailyReminderRefresh(context)
   }
 }
 
