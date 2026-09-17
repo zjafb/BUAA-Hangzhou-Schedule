@@ -32,10 +32,7 @@ import androidx.compose.ui.window.DialogProperties
 /** 杭州国际校园「空间预约管理平台」门户地址。 */
 private const val SPACE_RESERVATION_URL = "https://hzsm.buaa.edu.cn/venue/portal"
 
-/**
- * 打开「空间预约管理平台」：优先在应用内用 WebView 直接加载门户，不跳出 App。
- * 若门户要求钉钉容器环境，页面顶部提供「用钉钉打开」兜底。
- */
+/** 打开「空间预约管理平台」：优先在应用内用 WebView 直接加载门户，不跳出 App。 若门户要求钉钉容器环境，页面顶部提供「用钉钉打开」兜底。 */
 @Composable
 actual fun rememberOpenDingTalkSpaceReservation(): () -> Unit {
   val context = LocalContext.current
