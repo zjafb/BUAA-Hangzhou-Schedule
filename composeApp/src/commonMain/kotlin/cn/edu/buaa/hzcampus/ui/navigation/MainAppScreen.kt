@@ -36,6 +36,7 @@ import cn.edu.buaa.hzcampus.ui.common.util.BackHandlerCompat
 import cn.edu.buaa.hzcampus.ui.common.util.cancelClassReminders
 import cn.edu.buaa.hzcampus.ui.common.util.rememberOpenCampusGuide
 import cn.edu.buaa.hzcampus.ui.common.util.rememberOpenDingTalkSpaceReservation
+import cn.edu.buaa.hzcampus.ui.common.util.requestResult
 import cn.edu.buaa.hzcampus.ui.common.util.schedulePlanReminders
 import cn.edu.buaa.hzcampus.ui.common.util.scheduleUpcomingClassReminders
 import cn.edu.buaa.hzcampus.ui.screens.classroom.ClassroomQueryScreen
@@ -63,7 +64,10 @@ import cn.edu.buaa.hzcampus.ui.screens.schedule.ScheduleScreen
 import cn.edu.buaa.hzcampus.ui.screens.schedule.ScheduleViewModel
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
@@ -119,6 +123,32 @@ fun MainAppScreen(
     onLogoutClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+  SessionViewModels("${userData.schoolid}:$connectionMode") {
+    MainAppContent(
+        userData,
+        userInfo,
+        connectionMode,
+        availableConnectionModes,
+        onEnsureUserInfo,
+        onConnectionModeSelected,
+        onLogoutClick,
+        modifier,
+    )
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalTime::class)
+@Composable
+private fun MainAppContent(
+    userData: UserData,
+    userInfo: UserInfo?,
+    connectionMode: ConnectionMode,
+    availableConnectionModes: List<ConnectionMode>,
+    onEnsureUserInfo: () -> Unit,
+    onConnectionModeSelected: (ConnectionMode) -> Unit,
+    onLogoutClick: () -> Unit,
+    modifier: Modifier,
+) {
   val scope = rememberCoroutineScope()
   val navController = rememberNavigationController()
   val currentScreen = navController.currentScreen
@@ -136,6 +166,7 @@ fun MainAppScreen(
   // 邮件未读数
   val mailBackend = remember { createMailBackend() }
   var mailUnread by remember { mutableStateOf(MailAccountsStore.lastUnreadCount()) }
+  var mailUnreadJob by remember { mutableStateOf<Job?>(null) }
 
   // 课程名 -> 课程性质（必修/选修）。数据来自成绩数据，跨学期累积，见 CourseAttributeStore。
   var courseAttributes by remember { mutableStateOf(CourseAttributeStore.all()) }
@@ -150,25 +181,27 @@ fun MainAppScreen(
   }
 
   fun refreshMailUnread() {
-    scope.launch {
-      val accounts = MailAccountsStore.list()
-      if (accounts.isEmpty()) {
-        mailUnread = 0
-        MailAccountsStore.saveLastUnreadCount(0)
-      } else {
-        var total = 0
-        accounts.forEach { acc ->
-          total +=
-              try {
-                mailBackend.countUnread(acc)
-              } catch (e: Exception) {
-                0
-              }
+    mailUnreadJob?.cancel()
+    mailUnreadJob =
+        scope.launch {
+          val accounts = MailAccountsStore.list()
+          if (accounts.isEmpty()) {
+            mailUnread = 0
+            MailAccountsStore.saveLastUnreadCount(0)
+          } else {
+            var total = 0
+            accounts.forEach { acc ->
+              // 任一账户失败时保留上次总数，不能把“查询失败”显示为“没有未读”。
+              val count =
+                  requestResult { Result.success(mailBackend.countUnread(acc)) }.getOrNull()
+                      ?: return@launch
+              total += count
+            }
+            currentCoroutineContext().ensureActive()
+            mailUnread = total
+            MailAccountsStore.saveLastUnreadCount(total)
+          }
         }
-        mailUnread = total
-        MailAccountsStore.saveLastUnreadCount(total)
-      }
-    }
   }
 
   var reminderAdvanceMinutes by remember { mutableStateOf(ReminderStore.getAdvanceMinutes()) }
@@ -445,35 +478,6 @@ fun MainAppScreen(
     }
     if (currentScreen == AppScreen.MY) {
       onEnsureUserInfo()
-    }
-  }
-
-  // 连接模式切换后，重置所有 ViewModel 的加载标记与缓存数据，并强制刷新当前页面
-  LaunchedEffect(connectionMode, userData.schoolid) {
-    // 常驻 ViewModel
-    scheduleViewModel.resetLoadedState()
-    examViewModel.resetLoadedState()
-    // 按需 ViewModel（当前可能为 null，仅在存活时重置）
-    gradeViewModel?.resetLoadedState()
-    gradeScoreWatchViewModel.resetLoadedState()
-    evaluationViewModel?.resetLoadedState()
-    judgeViewModel.resetLoadedState()
-    // 刷新当前页面数据
-    when (currentScreen) {
-      AppScreen.HOME -> {
-        startHomeBootstrap(forceRefresh = true)
-        // 首页的考试倒计时也要跟着换连接模式后的新数据。
-        examViewModel.ensureLoaded(forceRefresh = true)
-      }
-      AppScreen.SCHEDULE -> scheduleViewModel.ensureScheduleLoaded(forceRefresh = true)
-      AppScreen.EXAM -> examViewModel.ensureLoaded(forceRefresh = true)
-      AppScreen.GRADE,
-      AppScreen.COURSE_QUERY -> gradeViewModel?.ensureLoaded(forceRefresh = true)
-      AppScreen.EVALUATION -> evaluationViewModel?.ensureLoaded(forceRefresh = true)
-      AppScreen.JUDGE_ASSIGNMENTS,
-      AppScreen.JUDGE_ASSIGNMENT_DETAIL ->
-          judgeViewModel.ensureAssignmentsLoaded(forceRefresh = true)
-      else -> Unit
     }
   }
 

@@ -33,6 +33,13 @@ object MailAccountsStore {
 
   fun lastUnreadCount(): Int = settings.getInt(KEY_UNREAD_CACHE, 0)
 
+  fun pageSize(): Int = settings.getInt("mail_page_size", 20).coerceIn(1, 500)
+
+  fun setPageSize(value: Int) {
+    require(value in 1..500)
+    settings.putInt("mail_page_size", value)
+  }
+
   fun saveLastUnreadCount(count: Int) {
     settings.putInt(KEY_UNREAD_CACHE, count)
   }

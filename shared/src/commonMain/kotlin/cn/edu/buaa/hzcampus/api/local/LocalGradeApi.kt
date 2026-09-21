@@ -1,5 +1,6 @@
 package cn.edu.buaa.hzcampus.api.local
 
+import cn.edu.buaa.hzcampus.api.auth.ApiCallException
 import cn.edu.buaa.hzcampus.api.auth.toUserFacingApiException
 import cn.edu.buaa.hzcampus.api.feature.GradeApiBackend
 import cn.edu.buaa.hzcampus.model.dto.BuaaScoreResponse
@@ -92,7 +93,15 @@ internal class LocalGradeApiBackend : GradeApiBackend {
 
       val payload = json.decodeFromString<BuaaScoreResponse>(body)
       if (payload.code != 0) {
-        Result.failure(localBusinessApiException("grade_error", "成绩查询失败，请稍后重试"))
+        Result.failure(
+            ApiCallException(
+                message =
+                    if (payload.message?.contains("数据库异常") == true) "学校成绩服务数据库异常（28002），请稍后重试"
+                    else "学校成绩服务返回错误，请稍后重试",
+                status = response.status,
+                code = "grade_error",
+            )
+        )
       } else {
         Result.success(
             GradeData(

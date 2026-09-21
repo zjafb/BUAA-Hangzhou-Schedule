@@ -3,6 +3,7 @@ package cn.edu.buaa.hzcampus.ui.screens.mail
 import cn.edu.buaa.hzcampus.model.dto.MailAccount
 import cn.edu.buaa.hzcampus.model.dto.MailMessage
 import jakarta.mail.AuthenticationFailedException
+import jakarta.mail.FetchProfile
 import jakarta.mail.Flags
 import jakarta.mail.Folder
 import jakarta.mail.Message
@@ -33,6 +34,46 @@ actual fun createMailBackend(): MailBackend = AndroidMailBackend
 private class MailException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 private object AndroidMailBackend : MailBackend {
+
+  override suspend fun loadPage(account: MailAccount, limit: Int, beforeUid: Long?): MailPage =
+      withImapFallback(account) { folder ->
+        require(limit in 1..500)
+        val uidFolder = folder as UIDFolder
+        val end =
+            if (beforeUid == null) folder.messageCount
+            else
+                uidFolder.getMessageByUID(beforeUid)?.messageNumber?.minus(1)
+                    ?: uidFolder
+                        .getMessagesByUID(1, beforeUid - 1)
+                        .filterNotNull()
+                        .lastOrNull()
+                        ?.messageNumber
+                    ?: 0
+        if (end <= 0) return@withImapFallback MailPage(emptyList(), null)
+        val start = (end - limit + 1).coerceAtLeast(1)
+        val selected = folder.getMessages(start, end)
+        folder.fetch(
+            selected,
+            FetchProfile().apply {
+              add(FetchProfile.Item.ENVELOPE)
+              add(FetchProfile.Item.FLAGS)
+              add(UIDFolder.FetchProfileItem.UID)
+            },
+        )
+        val result =
+            selected.reversed().map { msg ->
+              MailMessage(
+                  uidFolder.getUID(msg).toString(),
+                  msg.subject ?: "(无主题)",
+                  (msg.from?.firstOrNull() as? InternetAddress)?.address
+                      ?: msg.from?.firstOrNull()?.toString().orEmpty(),
+                  msg.receivedDate?.toString() ?: msg.sentDate?.toString().orEmpty(),
+                  !msg.flags.contains(Flags.Flag.SEEN),
+                  "",
+              )
+            }
+        MailPage(result, if (start > 1) result.last().uid.toLong() else null)
+      }
 
   override suspend fun connectAndList(account: MailAccount): List<MailMessage> =
       withImapFallback(account) { folder -> listMessages(folder) }
@@ -201,9 +242,7 @@ private object AndroidMailBackend : MailBackend {
   }
 
   private fun bodyByUid(folder: Folder, uid: String): String {
-    val msg =
-        folder.messages.firstOrNull { (folder as UIDFolder).getUID(it).toString() == uid }
-            ?: return "（未找到该邮件）"
+    val msg = (folder as UIDFolder).getMessageByUID(uid.toLong()) ?: return "（未找到该邮件）"
     // 打开正文时顺便标记已读，避免另开一条 IMAP 连接。
     runCatching { msg.setFlag(Flags.Flag.SEEN, true) }
     val text = runCatching { extractBodyText(msg) }.getOrDefault("").trim()

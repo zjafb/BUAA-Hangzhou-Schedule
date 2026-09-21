@@ -187,6 +187,18 @@ class ClassroomViewModelTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
   }
 
+  @Test
+  fun `building name search retains rooms inside matching building`() = runTest {
+    setMainDispatcher(testScheduler)
+    val viewModel = ClassroomViewModel(fakeApi())
+    viewModel.query()
+    advanceUntilIdle()
+    viewModel.setSearchQuery(" 教学楼A ")
+    advanceUntilIdle()
+    assertEquals(listOf("教学楼A"), viewModel.filteredData.value.keys.toList())
+    assertEquals(2, viewModel.filteredData.value.getValue("教学楼A").size)
+  }
+
   private fun fakeApi(): ClassroomApi {
     return object : ClassroomApi() {
       override suspend fun queryClassrooms(

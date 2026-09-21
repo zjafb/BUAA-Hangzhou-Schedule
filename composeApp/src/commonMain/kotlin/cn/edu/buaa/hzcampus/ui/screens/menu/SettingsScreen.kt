@@ -1,6 +1,7 @@
 package cn.edu.buaa.hzcampus.ui.screens.menu
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -34,7 +37,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import cn.edu.buaa.hzcampus.api.ConnectionMode
+import cn.edu.buaa.hzcampus.api.storage.MailAccountsStore
 import cn.edu.buaa.hzcampus.api.storage.ReminderStore
+import cn.edu.buaa.hzcampus.ui.common.util.EnhancedReminderSettings
 import cn.edu.buaa.hzcampus.ui.common.util.areNotificationsEnabled
 import cn.edu.buaa.hzcampus.ui.common.util.canScheduleExactAlarms
 import cn.edu.buaa.hzcampus.ui.common.util.openExactAlarmSettings
@@ -68,7 +73,62 @@ fun SettingsScreen(
     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
   }
 
-  Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
+  Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+    Text(
+        text = "课前提醒提前（分钟）",
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+      presets.forEach { minutes ->
+        FilterChip(
+            selected = !customEditing && advanceMinutes == minutes,
+            onClick = {
+              customEditing = false
+              advanceMinutes = minutes
+              ReminderStore.setAdvanceMinutes(minutes)
+            },
+            label = { Text("$minutes") },
+        )
+      }
+      FilterChip(
+          selected = customEditing,
+          onClick = { customEditing = true },
+          label = { Text("自定义") },
+      )
+    }
+    if (customEditing) {
+      Spacer(modifier = Modifier.height(8.dp))
+      OutlinedTextField(
+          value = customText,
+          onValueChange = { text ->
+            val digits = text.filter { it.isDigit() }
+            customText = digits
+            digits
+                .toIntOrNull()
+                ?.takeIf { it in 1..240 }
+                ?.let {
+                  advanceMinutes = it
+                  ReminderStore.setAdvanceMinutes(it)
+                }
+          },
+          label = { Text("自定义提前分钟数") },
+          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+          singleLine = true,
+          modifier = Modifier.fillMaxWidth(),
+      )
+    }
+
+    Spacer(Modifier.height(16.dp))
+    MailPageSizeSetting()
+    Spacer(Modifier.height(16.dp))
+    EnhancedReminderSettings()
+    Spacer(Modifier.height(16.dp))
     if (!areNotificationsEnabled()) {
       Card(
           modifier = Modifier.fillMaxWidth().clickable { openNotificationSettings() },
@@ -125,54 +185,6 @@ fun SettingsScreen(
         }
       }
       Spacer(modifier = Modifier.height(16.dp))
-    }
-    Text(
-        text = "课前提醒提前（分钟）",
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold,
-    )
-    Spacer(modifier = Modifier.height(8.dp))
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-      presets.forEach { minutes ->
-        FilterChip(
-            selected = !customEditing && advanceMinutes == minutes,
-            onClick = {
-              customEditing = false
-              advanceMinutes = minutes
-              ReminderStore.setAdvanceMinutes(minutes)
-            },
-            label = { Text("$minutes") },
-        )
-      }
-      FilterChip(
-          selected = customEditing,
-          onClick = { customEditing = true },
-          label = { Text("自定义") },
-      )
-    }
-    if (customEditing) {
-      Spacer(modifier = Modifier.height(8.dp))
-      OutlinedTextField(
-          value = customText,
-          onValueChange = { text ->
-            val digits = text.filter { it.isDigit() }
-            customText = digits
-            digits
-                .toIntOrNull()
-                ?.takeIf { it in 1..240 }
-                ?.let {
-                  advanceMinutes = it
-                  ReminderStore.setAdvanceMinutes(it)
-                }
-          },
-          label = { Text("自定义提前分钟数") },
-          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-          singleLine = true,
-          modifier = Modifier.fillMaxWidth(),
-      )
     }
 
     Spacer(modifier = Modifier.height(24.dp))
@@ -250,4 +262,54 @@ fun SettingsScreen(
         dismissButton = { TextButton(onClick = { pendingMode = null }) { Text("取消") } },
     )
   }
+}
+
+@Composable
+private fun MailPageSizeSetting() {
+  var size by remember { mutableStateOf(MailAccountsStore.pageSize()) }
+  val presets = listOf(10, 15, 20, 30)
+  var custom by remember { mutableStateOf(size !in presets) }
+  var input by remember { mutableStateOf(size.toString()) }
+  Text("邮件默认显示数量", style = MaterialTheme.typography.titleMedium)
+  Row(
+      modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+      horizontalArrangement = Arrangement.spacedBy(6.dp),
+      verticalAlignment = Alignment.CenterVertically,
+  ) {
+    presets.forEach { count ->
+      FilterChip(
+          selected = !custom && size == count,
+          onClick = {
+            size = count
+            custom = false
+            MailAccountsStore.setPageSize(count)
+          },
+          label = { Text("$count") },
+      )
+    }
+    FilterChip(selected = custom, onClick = { custom = true }, label = { Text("自定义") })
+  }
+  if (custom) {
+    val number = input.toIntOrNull()
+    OutlinedTextField(
+        value = input,
+        onValueChange = { input = it },
+        label = { Text("邮件数量（1–500）") },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        isError = number == null || number !in 1..500,
+    )
+    TextButton(
+        enabled = number != null && number in 1..500,
+        onClick = {
+          number?.let {
+            size = it
+            MailAccountsStore.setPageSize(it)
+          }
+        },
+    ) {
+      Text(if (size == number) "已保存" else "保存")
+    }
+  }
+  Text("每次加载 $size 封，收件箱底部可继续加载历史邮件。", style = MaterialTheme.typography.bodySmall)
 }

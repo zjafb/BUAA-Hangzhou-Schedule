@@ -114,16 +114,13 @@ internal fun GpaOverviewCard(
                   else -> summary.gpa?.let(::formatGradePoint) ?: "--"
                 },
             emphasize = true,
-            modifier = Modifier.weight(1.2f),
-        )
-        GpaMetric(
-            label = "课程数",
-            value = summary.totalCourses.toString(),
             modifier = Modifier.weight(1f),
         )
         GpaMetric(
-            label = "总学分",
-            value = summary.totalCredits.takeIf { it > 0.0 }?.let(::formatNumber) ?: "--",
+            label = "加权平均分",
+            value =
+                if (isLoading) "统计中" else summary.weightedAverageScore?.let(::formatNumber) ?: "--",
+            emphasize = true,
             modifier = Modifier.weight(1f),
         )
       }
@@ -146,22 +143,6 @@ internal fun GpaOverviewCard(
             label = "计入 GPA 学分",
             value =
                 if (summary.countedCredits > 0.0) formatNumber(summary.countedCredits) else "--",
-            modifier = Modifier.weight(1f),
-        )
-      }
-
-      Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(16.dp),
-      ) {
-        GpaMetric(
-            label = "加权平均分",
-            value = summary.weightedAverageScore?.let(::formatNumber) ?: "--",
-            modifier = Modifier.weight(1f),
-        )
-        GpaMetric(
-            label = "算数平均分",
-            value = summary.arithmeticAverageScore?.let(::formatNumber) ?: "--",
             modifier = Modifier.weight(1f),
         )
       }
@@ -222,8 +203,8 @@ private fun GpaMetric(
     Text(
         text = value,
         style =
-            if (emphasize) MaterialTheme.typography.headlineSmall
-            else MaterialTheme.typography.titleLarge,
+            if (emphasize) MaterialTheme.typography.headlineMedium
+            else MaterialTheme.typography.bodyMedium,
         fontWeight = FontWeight.Bold,
     )
     Text(

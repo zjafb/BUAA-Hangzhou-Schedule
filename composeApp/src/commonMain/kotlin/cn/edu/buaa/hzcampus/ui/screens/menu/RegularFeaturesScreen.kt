@@ -1,9 +1,6 @@
 package cn.edu.buaa.hzcampus.ui.screens.menu
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
@@ -94,37 +91,32 @@ fun RegularFeaturesScreen(
           ),
       )
 
-  Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-      items(features) { feature ->
-        FeatureCard(
-            feature = feature,
-            onClick = {
-              when (feature.id) {
-                "schedule" -> onScheduleClick()
-                "exam" -> onExamClick()
-                "grade" -> onCourseQueryClick()
-                "classroom" -> onClassroomClick()
-                "judge" -> onJudgeClick()
-                "space" -> onSpaceReservationClick()
-                "mail" -> onMailClick()
-                "guide" -> onCampusGuideClick()
-              }
-            },
-        )
-      }
+  FeatureGrid(modifier = modifier) {
+    items(features, key = { it.id }) { feature ->
+      FeatureCard(
+          feature = feature,
+          onClick = {
+            when (feature.id) {
+              "schedule" -> onScheduleClick()
+              "exam" -> onExamClick()
+              "grade" -> onCourseQueryClick()
+              "classroom" -> onClassroomClick()
+              "judge" -> onJudgeClick()
+              "space" -> onSpaceReservationClick()
+              "mail" -> onMailClick()
+              "guide" -> onCampusGuideClick()
+            }
+          },
+      )
     }
   }
 }
 
 @Composable
-private fun FeatureCard(feature: FeatureItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun FeatureCard(feature: FeatureItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
   Card(
-      modifier = modifier.fillMaxWidth().heightIn(min = 160.dp).clickable { onClick() },
+      onClick = onClick,
+      modifier = modifier.fillMaxWidth().heightIn(min = 160.dp),
       colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
       elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
   ) {

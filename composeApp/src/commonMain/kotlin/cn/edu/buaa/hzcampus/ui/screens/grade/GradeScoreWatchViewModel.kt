@@ -10,6 +10,8 @@ import cn.edu.buaa.hzcampus.model.dto.Grade
 import cn.edu.buaa.hzcampus.model.dto.GradeData
 import cn.edu.buaa.hzcampus.model.dto.Term
 import cn.edu.buaa.hzcampus.model.dto.courseAttributesByName
+import cn.edu.buaa.hzcampus.ui.common.util.requestResult
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,6 +39,7 @@ internal constructor(
     private val cache: GradeScoreCache = PersistentGradeScoreCache,
 ) : ViewModel() {
   private var loadedOnce = false
+  private var checkJob: Job? = null
 
   private val _uiState = MutableStateFlow(GradeScoreWatchUiState())
   val uiState: StateFlow<GradeScoreWatchUiState> = _uiState.asStateFlow()
@@ -49,6 +52,7 @@ internal constructor(
   }
 
   fun resetLoadedState() {
+    checkJob?.cancel()
     loadedOnce = false
     _uiState.value = GradeScoreWatchUiState()
   }
@@ -58,64 +62,71 @@ internal constructor(
   }
 
   fun checkForUpdates(forceRefresh: Boolean = false) {
-    loadedOnce = true
-    viewModelScope.launch {
-      _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+    if (!forceRefresh && (loadedOnce || checkJob?.isActive == true)) return
+    checkJob?.cancel()
+    loadedOnce = false
+    checkJob =
+        viewModelScope.launch {
+          _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
-      val terms =
-          termsSource.getTerms(forceRefresh).getOrElse { exception ->
-            _uiState.value =
-                _uiState.value.copy(
-                    isLoading = false,
-                    error = exception.message ?: "检查成绩更新失败",
-                )
+          val terms =
+              requestResult { termsSource.getTerms(forceRefresh) }
+                  .getOrElse { exception ->
+                    _uiState.value =
+                        _uiState.value.copy(
+                            isLoading = false,
+                            error = exception.message ?: "检查成绩更新失败",
+                        )
+                    return@launch
+                  }
+
+          val currentTerm = terms.currentTermOrNull()
+          if (currentTerm == null) {
+            loadedOnce = true
+            _uiState.value = _uiState.value.copy(isLoading = false, error = null)
             return@launch
           }
 
-      val currentTerm = terms.currentTermOrNull()
-      if (currentTerm == null) {
-        _uiState.value = _uiState.value.copy(isLoading = false, error = null)
-        return@launch
-      }
+          val gradeData =
+              requestResult { gradeSource.getGrades(currentTerm.itemCode) }
+                  .getOrElse { exception ->
+                    _uiState.value =
+                        _uiState.value.copy(
+                            isLoading = false,
+                            error = exception.message ?: "检查成绩更新失败",
+                        )
+                    return@launch
+                  }
 
-      val gradeData =
-          gradeSource.getGrades(currentTerm.itemCode).getOrElse { exception ->
-            _uiState.value =
-                _uiState.value.copy(
-                    isLoading = false,
-                    error = exception.message ?: "检查成绩更新失败",
-                )
+          val latestCache = gradeData.toScoreCache(currentTerm)
+          loadedOnce = true
+          // 成绩数据是课程性质（必修/选修）的唯一来源，顺手沉淀到本地映射，供首页课表显示「必 / 选」。
+          CourseAttributeStore.putAll(gradeData.courseAttributesByName())
+          if (latestCache.scores.isEmpty()) {
+            _uiState.value = _uiState.value.copy(isLoading = false, error = null)
             return@launch
           }
 
-      val latestCache = gradeData.toScoreCache(currentTerm)
-      // 成绩数据是课程性质（必修/选修）的唯一来源，顺手沉淀到本地映射，供首页课表显示「必 / 选」。
-      CourseAttributeStore.putAll(gradeData.courseAttributesByName())
-      if (latestCache.scores.isEmpty()) {
-        _uiState.value = _uiState.value.copy(isLoading = false, error = null)
-        return@launch
-      }
+          val previousCache = cache.get(userKey)
+          cache.save(userKey, latestCache)
 
-      val previousCache = cache.get(userKey)
-      cache.save(userKey, latestCache)
-
-      val changedScores = previousCache?.changedScoresComparedWith(latestCache).orEmpty()
-      _uiState.value =
-          _uiState.value.copy(
-              isLoading = false,
-              error = null,
-              notice =
-                  if (changedScores.isNotEmpty()) {
-                    GradeScoreUpdateNotice(
-                        termCode = latestCache.termCode,
-                        termName = latestCache.termName ?: currentTerm.itemName,
-                        changedScores = changedScores,
-                    )
-                  } else {
-                    _uiState.value.notice
-                  },
-          )
-    }
+          val changedScores = previousCache?.changedScoresComparedWith(latestCache).orEmpty()
+          _uiState.value =
+              _uiState.value.copy(
+                  isLoading = false,
+                  error = null,
+                  notice =
+                      if (changedScores.isNotEmpty()) {
+                        GradeScoreUpdateNotice(
+                            termCode = latestCache.termCode,
+                            termName = latestCache.termName ?: currentTerm.itemName,
+                            changedScores = changedScores,
+                        )
+                      } else {
+                        _uiState.value.notice
+                      },
+              )
+        }
   }
 }
 

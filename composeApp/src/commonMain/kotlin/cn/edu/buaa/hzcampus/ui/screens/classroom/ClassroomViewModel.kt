@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import cn.edu.buaa.hzcampus.api.feature.ClassroomApi
 import cn.edu.buaa.hzcampus.model.dto.ClassroomInfo
 import cn.edu.buaa.hzcampus.model.dto.ClassroomQueryResponse
+import cn.edu.buaa.hzcampus.ui.common.util.requestResult
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
@@ -25,6 +27,7 @@ sealed class ClassroomUiState {
 
 /** 教室查询模块的 ViewModel。 负责校区选择、日期选择以及在结果中进行模糊搜索过滤。 */
 class ClassroomViewModel(private val api: ClassroomApi = ClassroomApi()) : ViewModel() {
+  private var queryJob: Job? = null
   private val _uiState = MutableStateFlow<ClassroomUiState>(ClassroomUiState.Idle)
   /** 核心查询状态流。 */
   val uiState: StateFlow<ClassroomUiState> = _uiState.asStateFlow()
@@ -71,7 +74,10 @@ class ClassroomViewModel(private val api: ClassroomApi = ClassroomApi()) : ViewM
                 buildingFilteredData
               } else {
                 buildingFilteredData
-                    .mapValues { (_, list) -> list.filter { it.name.contains(query, true) } }
+                    .mapValues { (building, list) ->
+                      if (building.contains(query.trim(), true)) list
+                      else list.filter { it.name.contains(query.trim(), true) }
+                    }
                     .filter { (building, list) ->
                       building.contains(query, true) || list.isNotEmpty()
                     }
@@ -92,6 +98,7 @@ class ClassroomViewModel(private val api: ClassroomApi = ClassroomApi()) : ViewM
 
   /** 切换校区并自动重新查询。 */
   fun setXqid(id: Int) {
+    if (_xqid.value == id) return
     _xqid.value = id
     _selectedBuilding.value = null
     query()
@@ -99,6 +106,7 @@ class ClassroomViewModel(private val api: ClassroomApi = ClassroomApi()) : ViewM
 
   /** 切换日期并自动重新查询。 */
   fun setDate(date: String) {
+    if (_date.value == date) return
     _date.value = date
     _selectedBuilding.value = null
     query()
@@ -106,17 +114,21 @@ class ClassroomViewModel(private val api: ClassroomApi = ClassroomApi()) : ViewM
 
   /** 执行查询动作。 */
   fun query() {
-    viewModelScope.launch {
-      _uiState.value = ClassroomUiState.Loading
-      api.queryClassrooms(_xqid.value, _date.value)
-          .onSuccess {
-            _uiState.value = ClassroomUiState.Success(it)
-            if (_selectedBuilding.value !in it.d.list.keys) {
-              _selectedBuilding.value = null
-            }
-          }
-          .onFailure { _uiState.value = ClassroomUiState.Error(it.message ?: "未知错误") }
-    }
+    queryJob?.cancel()
+    val campus = _xqid.value
+    val queryDate = _date.value
+    queryJob =
+        viewModelScope.launch {
+          _uiState.value = ClassroomUiState.Loading
+          requestResult { api.queryClassrooms(campus, queryDate) }
+              .onSuccess {
+                _uiState.value = ClassroomUiState.Success(it)
+                if (_selectedBuilding.value !in it.d.list.keys) {
+                  _selectedBuilding.value = null
+                }
+              }
+              .onFailure { _uiState.value = ClassroomUiState.Error(it.message ?: "未知错误") }
+        }
   }
 
   @OptIn(ExperimentalTime::class)

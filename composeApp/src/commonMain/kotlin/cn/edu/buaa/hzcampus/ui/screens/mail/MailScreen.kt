@@ -63,7 +63,9 @@ import androidx.compose.ui.window.Dialog
 import cn.edu.buaa.hzcampus.api.storage.MailAccountsStore
 import cn.edu.buaa.hzcampus.model.dto.MailAccount
 import cn.edu.buaa.hzcampus.model.dto.MailMessage
+import cn.edu.buaa.hzcampus.ui.common.util.requestResult
 import kotlin.time.Clock
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -84,6 +86,10 @@ fun MailScreen(modifier: Modifier = Modifier, onMailChanged: () -> Unit = {}) {
   var messages by remember { mutableStateOf<List<MailMessage>>(emptyList()) }
   var loading by remember { mutableStateOf(false) }
   var error by remember { mutableStateOf<String?>(null) }
+  var pageJob by remember { mutableStateOf<Job?>(null) }
+  var nextBeforeUid by remember { mutableStateOf<Long?>(null) }
+  val pageSize = remember { MailAccountsStore.pageSize() }
+  var readUids by remember(selectedAccountId) { mutableStateOf<Set<String>>(emptySet()) }
 
   var showAccountForm by remember { mutableStateOf(accounts.isEmpty()) }
   var editingAccount by remember { mutableStateOf<MailAccount?>(null) }
@@ -107,16 +113,27 @@ fun MailScreen(modifier: Modifier = Modifier, onMailChanged: () -> Unit = {}) {
     selectedUids = emptySet()
   }
 
-  fun refresh() {
+  fun refresh(more: Boolean = false) {
     val acc = selectedAccount ?: return
-    scope.launch {
-      loading = true
-      error = null
-      runCatching { backend.connectAndList(acc) }
-          .onSuccess { messages = it }
-          .onFailure { error = it.message ?: "连接失败，请检查账号配置" }
-      loading = false
-    }
+    if (more && (loading || nextBeforeUid == null)) return
+    val cursor = if (more) nextBeforeUid else null
+    pageJob?.cancel()
+    pageJob =
+        scope.launch {
+          loading = true
+          error = null
+          requestResult { Result.success(backend.loadPage(acc, pageSize, cursor)) }
+              .onSuccess { page ->
+                messages =
+                    ((if (more) messages else emptyList()) + page.messages)
+                        .distinctBy { it.uid }
+                        .sortedByDescending { it.uid.toLongOrNull() ?: 0 }
+                        .map { if (it.uid in readUids) it.copy(unread = false) else it }
+                nextBeforeUid = page.nextBeforeUid
+              }
+              .onFailure { error = it.message ?: "连接失败，请检查账号配置" }
+          loading = false
+        }
   }
 
   /** 真正执行删除：先本地移除做即时反馈，再连服务器删除并刷新列表与未读数。 */
@@ -143,7 +160,12 @@ fun MailScreen(modifier: Modifier = Modifier, onMailChanged: () -> Unit = {}) {
     }
   }
 
-  LaunchedEffect(selectedAccountId) { refresh() }
+  LaunchedEffect(selectedAccountId) {
+    messages = emptyList()
+    nextBeforeUid = null
+    selectedMessage = null
+    refresh()
+  }
 
   if (showAccountForm) {
     MailAccountFormDialog(
@@ -292,7 +314,7 @@ fun MailScreen(modifier: Modifier = Modifier, onMailChanged: () -> Unit = {}) {
       }
       else -> {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          items(messages) { msg ->
+          items(messages, key = { it.uid }) { msg ->
             MailMessageRow(
                 message = msg,
                 selectionMode = selectionMode,
@@ -303,7 +325,10 @@ fun MailScreen(modifier: Modifier = Modifier, onMailChanged: () -> Unit = {}) {
                         if (msg.uid in selectedUids) selectedUids - msg.uid
                         else selectedUids + msg.uid
                   } else {
-                    selectedMessage = msg
+                    readUids = readUids + msg.uid
+                    messages =
+                        messages.map { if (it.uid == msg.uid) it.copy(unread = false) else it }
+                    selectedMessage = msg.copy(unread = false)
                   }
                 },
                 onLongClick = {
@@ -312,6 +337,16 @@ fun MailScreen(modifier: Modifier = Modifier, onMailChanged: () -> Unit = {}) {
                   }
                 },
             )
+          }
+          item {
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+              error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+              if (nextBeforeUid != null) {
+                TextButton(onClick = { refresh(more = true) }, enabled = !loading) {
+                  Text(if (loading) "正在加载…" else "查看更多历史邮件")
+                }
+              } else Text("已显示全部邮件", style = MaterialTheme.typography.bodySmall)
+            }
           }
         }
       }
@@ -326,6 +361,7 @@ fun MailScreen(modifier: Modifier = Modifier, onMailChanged: () -> Unit = {}) {
           message = msg,
           account = acc,
           backend = backend,
+          onRead = onMailChanged,
           onDismiss = { selectedMessage = null },
           onDelete = {
             selectedMessage = null
@@ -435,6 +471,7 @@ private fun MessageDetailDialog(
     message: MailMessage,
     account: MailAccount,
     backend: MailBackend,
+    onRead: () -> Unit,
     onDismiss: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -449,7 +486,10 @@ private fun MessageDetailDialog(
         withTimeoutOrNull(30_000) { runCatching { backend.fetchBody(account, message.uid) } }
     when {
       result == null -> error = "加载正文超时，请重试"
-      result.isSuccess -> body = result.getOrNull()
+      result.isSuccess -> {
+        body = result.getOrNull()
+        onRead()
+      }
       else -> error = result.exceptionOrNull()?.message ?: "加载正文失败"
     }
   }

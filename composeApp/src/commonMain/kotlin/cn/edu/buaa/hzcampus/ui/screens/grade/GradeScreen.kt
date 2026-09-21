@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -64,7 +65,11 @@ private fun GradeScreenScaffold(
       }
       uiState.error != null -> {
         Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-          Text(text = "加载失败: ${uiState.error}", color = MaterialTheme.colorScheme.error)
+          Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text = "加载失败: ${uiState.error}", color = MaterialTheme.colorScheme.error)
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = { viewModel.ensureLoaded(forceRefresh = true) }) { Text("重试") }
+          }
         }
       }
       else -> content(uiState)

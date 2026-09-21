@@ -24,6 +24,34 @@ import kotlinx.coroutines.test.setMain
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class GradeViewModelTest {
+  @Test
+  fun `history failure does not discard other terms and concurrency is bounded`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val terms = (1..6).map { Term("$it", "学期$it", it == 1, it) }
+    var active = 0
+    var maximum = 0
+    val source =
+        object : GradeDataSource {
+          override suspend fun getGrades(termCode: String): Result<GradeData> {
+            active++
+            maximum = maxOf(maximum, active)
+            try {
+              delay(100)
+              return if (termCode == "2") Result.failure(IllegalStateException("offline"))
+              else Result.success(GradeData(termCode = termCode, grades = emptyList()))
+            } finally {
+              active--
+            }
+          }
+        }
+    val model = GradeViewModel(source, FakeGradeTermsSource(terms))
+    model.ensureLoaded()
+    advanceUntilIdle()
+    assertEquals(3, maximum)
+    assertEquals(setOf("1", "3", "4", "5", "6"), model.uiState.value.termGrades.keys)
+    assertFalse(model.uiState.value.isSummaryLoading)
+  }
+
   @AfterTest
   fun tearDown() {
     Dispatchers.resetMain()

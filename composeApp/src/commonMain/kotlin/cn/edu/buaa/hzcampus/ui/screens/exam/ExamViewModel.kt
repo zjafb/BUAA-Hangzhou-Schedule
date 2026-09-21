@@ -7,6 +7,8 @@ import cn.edu.buaa.hzcampus.model.dto.ExamArrangementData
 import cn.edu.buaa.hzcampus.model.dto.Term
 import cn.edu.buaa.hzcampus.repository.GlobalTermRepository
 import cn.edu.buaa.hzcampus.repository.TermRepository
+import cn.edu.buaa.hzcampus.ui.common.util.requestResult
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,68 +19,85 @@ class ExamViewModel(
     private val termRepository: TermRepository = GlobalTermRepository.instance,
 ) : ViewModel() {
   private var loadedOnce = false
+  private var termsJob: Job? = null
+  private var examsJob: Job? = null
 
   private val _uiState = MutableStateFlow(ExamUiState())
   val uiState: StateFlow<ExamUiState> = _uiState.asStateFlow()
 
   fun ensureLoaded(forceRefresh: Boolean = false) {
-    if (!forceRefresh && loadedOnce) return
+    if (!forceRefresh && (loadedOnce || termsJob?.isActive == true || examsJob?.isActive == true))
+        return
     loadTerms(forceRefresh)
   }
 
   /** 重置内部加载标记与 UI 状态，用于连接模式切换等场景。 */
   fun resetLoadedState() {
+    termsJob?.cancel()
+    examsJob?.cancel()
     loadedOnce = false
     _uiState.value = ExamUiState()
   }
 
   fun loadTerms(forceRefresh: Boolean = false) {
-    loadedOnce = true
-    viewModelScope.launch {
-      _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+    termsJob?.cancel()
+    examsJob?.cancel()
+    loadedOnce = false
+    termsJob =
+        viewModelScope.launch {
+          _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
-      termRepository
-          .getTerms(forceRefresh)
-          .onSuccess { terms ->
-            val selectedTerm = terms.find { it.selected } ?: terms.firstOrNull()
-            _uiState.value =
-                _uiState.value.copy(
-                    isLoading = false,
-                    terms = terms,
-                    selectedTerm = selectedTerm,
-                    error = null,
-                )
-            selectedTerm?.let { loadExams(it.itemCode) }
-          }
-          .onFailure { exception ->
-            _uiState.value =
-                _uiState.value.copy(isLoading = false, error = exception.message ?: "加载学期信息失败")
-          }
-    }
+          requestResult { termRepository.getTerms(forceRefresh) }
+              .onSuccess { terms ->
+                val selectedTerm =
+                    terms.find { it.itemCode == _uiState.value.selectedTerm?.itemCode }
+                        ?: terms.find { it.selected }
+                        ?: terms.firstOrNull()
+                _uiState.value =
+                    _uiState.value.copy(
+                        isLoading = false,
+                        terms = terms,
+                        selectedTerm = selectedTerm,
+                        examData =
+                            if (selectedTerm == _uiState.value.selectedTerm) _uiState.value.examData
+                            else null,
+                        error = null,
+                    )
+                if (selectedTerm == null) loadedOnce = true else loadExams(selectedTerm.itemCode)
+              }
+              .onFailure { exception ->
+                _uiState.value =
+                    _uiState.value.copy(isLoading = false, error = exception.message ?: "加载学期信息失败")
+              }
+        }
   }
 
   fun selectTerm(term: Term) {
     if (_uiState.value.selectedTerm != term) {
-      _uiState.value = _uiState.value.copy(selectedTerm = term)
+      termsJob?.cancel()
+      _uiState.value = _uiState.value.copy(selectedTerm = term, examData = null)
       loadExams(term.itemCode)
     }
   }
 
   private fun loadExams(termCode: String) {
-    viewModelScope.launch {
-      _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+    examsJob?.cancel()
+    examsJob =
+        viewModelScope.launch {
+          _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
-      scheduleApi
-          .getExamArrangement(termCode)
-          .onSuccess { examData ->
-            _uiState.value =
-                _uiState.value.copy(isLoading = false, examData = examData, error = null)
-          }
-          .onFailure { exception ->
-            _uiState.value =
-                _uiState.value.copy(isLoading = false, error = exception.message ?: "加载考试信息失败")
-          }
-    }
+          requestResult { scheduleApi.getExamArrangement(termCode) }
+              .onSuccess { examData ->
+                loadedOnce = true
+                _uiState.value =
+                    _uiState.value.copy(isLoading = false, examData = examData, error = null)
+              }
+              .onFailure { exception ->
+                loadedOnce = false
+                _uiState.value =
+                    _uiState.value.copy(isLoading = false, error = exception.message ?: "加载考试信息失败")
+              }
+        }
   }
 }
 

@@ -51,15 +51,17 @@ import kotlinx.datetime.LocalDate
 
 val LocalScheduleResponseExporter = staticCompositionLocalOf<((String) -> Unit)?> { null }
 
-/** 计划任务在课表网格中的定位：星期（1=周一）+ 起始节次 + 跨越节次数。 */
+/** 计划任务的节次范围，以及首尾节次内按分钟计算的相对位置（0–1）。 */
 internal data class PlanCell(
     val dayOfWeek: Int,
     val section: Int,
     val span: Int,
     val task: PlanTask,
+    val startFraction: Float = 0f,
+    val endFraction: Float = 1f,
 )
 
-/** 将计划任务映射到课表 (dayOfWeek, section, span)，span 依据 startTime~endTime 跨越的节次数计算。 */
+/** 将计划任务映射到课表；开始和结束时间在课时内按比例定位。 */
 internal fun planTaskToCell(task: PlanTask, week: Week, times: List<SectionTime>): PlanCell? {
   val date = runCatching { LocalDate.parse(task.date) }.getOrNull() ?: return null
   val weekStart = runCatching { LocalDate.parse(week.startDate) }.getOrNull() ?: return null
@@ -99,7 +101,23 @@ internal fun planTaskToCell(task: PlanTask, week: Week, times: List<SectionTime>
         if (last == null) startSection else maxOf(startSection, last)
       }
   val span = endSection - startSection + 1
-  return PlanCell(dayOfWeek, startSection, span, task)
+  fun fraction(value: String, section: Int): Float {
+    fun minutes(time: String?): Int? {
+      val parts = time?.split(":") ?: return null
+      val hour = parts.getOrNull(0)?.toIntOrNull() ?: return null
+      val minute = parts.getOrNull(1)?.toIntOrNull() ?: return null
+      return hour * 60 + minute
+    }
+    val slot = times.first { it.section == section }
+    val start = minutes(slot.start) ?: return 0f
+    val end = minutes(slot.end) ?: return 1f
+    if (end <= start) return 0f
+    return (((minutes(value) ?: start) - start).toFloat() / (end - start)).coerceIn(0f, 1f)
+  }
+  val startFraction = fraction(taskStartTime, startSection)
+  val endFraction = endTime?.let { fraction(it, endSection) } ?: 1f
+  if (span - 1 + endFraction - startFraction <= 0f) return null
+  return PlanCell(dayOfWeek, startSection, span, task, startFraction, endFraction)
 }
 
 /** 不授予在线登录状态，断网或会话过期时仍可读取上次登录账号的本地课表。 */
@@ -536,17 +554,21 @@ private fun ScheduleTopAppBar(
       actions = {
         if (onExportCalendar != null)
             IconButton(onClick = onExportCalendar, enabled = !isExportingCalendar) {
-              // 图标下方补一行小字，避免用户看不出这是「导出 .ics 日历」入口。
+              // 圆形 IconButton 内保留完整标签，通过缩小图标和字号避免裁切。
               Column(
                   horizontalAlignment = Alignment.CenterHorizontally,
                   verticalArrangement = Arrangement.Center,
               ) {
-                Icon(Icons.Default.CalendarMonth, "导出到系统日历")
+                Icon(
+                    Icons.Default.CalendarMonth,
+                    "导出到系统日历",
+                    modifier = Modifier.size(20.dp),
+                )
                 Text(
                     text = ".ics导出",
                     style = MaterialTheme.typography.labelSmall,
-                    fontSize = 9.sp,
-                    lineHeight = 10.sp,
+                    fontSize = 7.sp,
+                    lineHeight = 8.sp,
                     maxLines = 1,
                 )
               }
@@ -784,8 +806,8 @@ private fun WeeklyScheduleGrid(
             cell,
             { onPlanClick(cell.task) },
             { onPlanLongClick(cell.task) },
-            Modifier.offset(cellWidth * dayIndex, rowHeight * startIdx)
-                .size(cellWidth, rowHeight * span)
+            Modifier.offset(cellWidth * dayIndex, rowHeight * (startIdx + cell.startFraction))
+                .size(cellWidth, rowHeight * (span - 1 + cell.endFraction - cell.startFraction))
                 .padding(1.dp),
         )
       }

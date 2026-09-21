@@ -240,6 +240,27 @@ class LocalScheduleApiBackendTest {
   }
 
   @Test
+  fun `grade database failure remains a failure with useful message`() = runTest {
+    useMockUpstream(
+        MockEngine { request ->
+          respond(
+              content =
+                  ByteReadChannel(
+                      if (request.method == HttpMethod.Post)
+                          """{"e":1,"m":"28002 : 数据库异常","d":{}}"""
+                      else "<html>score home</html>"
+                  ),
+              status = HttpStatusCode.OK,
+              headers = headersOf(HttpHeaders.ContentType, "application/json"),
+          )
+        }
+    )
+    val result = GradeApi().getGrades("20261")
+    assertTrue(result.isFailure)
+    assertTrue(result.exceptionOrNull()?.message?.contains("数据库异常") == true)
+  }
+
+  @Test
   fun `grade api uses direct upstream backend to fetch grades`() = runTest {
     val engine = MockEngine { request ->
       when {
@@ -272,7 +293,7 @@ class LocalScheduleApiBackendTest {
     }
     useMockUpstream(engine)
 
-    val result = GradeApi().getGrades("2025-2026-1")
+    val result = GradeApi().getGrades("20251")
 
     assertTrue(result.isSuccess)
     assertEquals("高等数学", result.getOrNull()?.grades?.singleOrNull()?.courseName)

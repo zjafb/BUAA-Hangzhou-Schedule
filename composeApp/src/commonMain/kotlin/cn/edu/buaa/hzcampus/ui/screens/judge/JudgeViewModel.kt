@@ -2,12 +2,16 @@ package cn.edu.buaa.hzcampus.ui.screens.judge
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cn.edu.buaa.hzcampus.api.ConnectionMode
+import cn.edu.buaa.hzcampus.api.ConnectionRuntime
+import cn.edu.buaa.hzcampus.api.auth.ApiCallException
 import cn.edu.buaa.hzcampus.api.feature.JudgeApi
 import cn.edu.buaa.hzcampus.model.dto.JudgeAssignmentDetailDto
 import cn.edu.buaa.hzcampus.model.dto.JudgeAssignmentDetailKeyDto
 import cn.edu.buaa.hzcampus.model.dto.JudgeAssignmentSummaryDto
 import cn.edu.buaa.hzcampus.model.dto.JudgeAssignmentsResponse
 import cn.edu.buaa.hzcampus.model.dto.JudgeSubmissionStatus
+import cn.edu.buaa.hzcampus.ui.common.util.requestResult
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlinx.coroutines.Job
@@ -54,13 +58,15 @@ class JudgeViewModel(
 ) : ViewModel() {
   private var assignmentsLoadedOnce = false
   private var assignmentLoadVersion = 0
+  private var assignmentsJob: Job? = null
+  private var detailJob: Job? = null
   private var assignmentDetailEnrichmentJob: Job? = null
   private val assignmentDetailCache = mutableMapOf<String, JudgeAssignmentDetailDto>()
   private val _uiState = MutableStateFlow(JudgeUiState())
   val uiState: StateFlow<JudgeUiState> = _uiState.asStateFlow()
 
   fun ensureAssignmentsLoaded(forceRefresh: Boolean = false) {
-    if (!forceRefresh && assignmentsLoadedOnce) return
+    if (!forceRefresh && (assignmentsLoadedOnce || assignmentsJob?.isActive == true)) return
     loadAssignments(refresh = forceRefresh)
   }
 
@@ -68,70 +74,81 @@ class JudgeViewModel(
 
   /** 重置内部加载标记与 UI 状态，用于连接模式切换等场景。 */
   fun resetLoadedState() {
+    assignmentLoadVersion++
+    assignmentsJob?.cancel()
+    detailJob?.cancel()
+    assignmentDetailEnrichmentJob?.cancel()
     assignmentsLoadedOnce = false
     assignmentDetailCache.clear()
     _uiState.value = JudgeUiState()
   }
 
   fun loadAssignments(refresh: Boolean = false) {
-    assignmentsLoadedOnce = true
+    assignmentsJob?.cancel()
+    assignmentsLoadedOnce = false
     assignmentLoadVersion++
     val loadVersion = assignmentLoadVersion
     val includeExpired = _uiState.value.showExpired
     assignmentDetailEnrichmentJob?.cancel()
     assignmentDetailCache.clear()
-    viewModelScope.launch {
-      val hasExistingData = _uiState.value.assignmentsResponse != null
-      _uiState.value =
-          _uiState.value.copy(
-              isLoading = !refresh || !hasExistingData,
-              isRefreshing = refresh,
-              isEnrichingAssignments = false,
-              error = null,
-          )
+    assignmentsJob =
+        viewModelScope.launch {
+          val hasExistingData = _uiState.value.assignmentsResponse != null
+          _uiState.value =
+              _uiState.value.copy(
+                  isLoading = !hasExistingData,
+                  isRefreshing = refresh || hasExistingData,
+                  isEnrichingAssignments = false,
+                  error = null,
+              )
 
-      // 摘要阶段加了超时兜底：任何情况下都不能让待办区永远停在 loading。
-      val result =
-          withTimeoutOrNull(JUDGE_ASSIGNMENTS_TIMEOUT_MILLIS) {
-            judgeApi.getAssignments(includeExpired = includeExpired, userKey = userKey)
-          }
-      if (result == null) {
-        _uiState.value =
-            _uiState.value.copy(
-                isLoading = false,
-                isRefreshing = false,
-                isEnrichingAssignments = false,
-                error = "希冀作业同步超时，请下拉刷新或稍后重试",
-            )
-        return@launch
-      }
-
-      result
-          .onSuccess { response ->
-            val currentState = _uiState.value
-            val shouldEnrichAssignments = response.assignments.any { it.needsDetailEnrichment() }
-            _uiState.value =
-                currentState.copy(
-                    isLoading = false,
-                    isRefreshing = false,
-                    isEnrichingAssignments = shouldEnrichAssignments,
-                    assignmentsResponse = response,
-                    visibleAssignments =
-                        buildVisibleAssignments(response.assignments, currentState),
-                    error = null,
-                )
-            startAssignmentDetailEnrichment(response.assignments, loadVersion)
-          }
-          .onFailure { exception ->
+          // 摘要阶段加了超时兜底：任何情况下都不能让待办区永远停在 loading。
+          val result =
+              withTimeoutOrNull(JUDGE_ASSIGNMENTS_TIMEOUT_MILLIS) {
+                requestResult {
+                  judgeApi.getAssignments(includeExpired = includeExpired, userKey = userKey)
+                }
+              }
+          if (loadVersion != assignmentLoadVersion) return@launch
+          if (result == null) {
             _uiState.value =
                 _uiState.value.copy(
                     isLoading = false,
                     isRefreshing = false,
                     isEnrichingAssignments = false,
-                    error = exception.message ?: "加载希冀作业失败",
+                    error = judgeAssignmentsTimeoutMessage(),
                 )
+            return@launch
           }
-    }
+
+          result
+              .onSuccess { response ->
+                assignmentsLoadedOnce = true
+                val currentState = _uiState.value
+                val shouldEnrichAssignments =
+                    response.assignments.any { it.needsDetailEnrichment() }
+                _uiState.value =
+                    currentState.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        isEnrichingAssignments = shouldEnrichAssignments,
+                        assignmentsResponse = response,
+                        visibleAssignments =
+                            buildVisibleAssignments(response.assignments, currentState),
+                        error = null,
+                    )
+                startAssignmentDetailEnrichment(response.assignments, loadVersion)
+              }
+              .onFailure { exception ->
+                _uiState.value =
+                    _uiState.value.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        isEnrichingAssignments = false,
+                        error = judgeAssignmentsErrorMessage(exception),
+                    )
+              }
+        }
   }
 
   fun setSearchQuery(query: String) {
@@ -164,6 +181,7 @@ class JudgeViewModel(
   }
 
   fun loadAssignmentDetail(courseId: String, assignmentId: String) {
+    detailJob?.cancel()
     assignmentDetailCache[detailCacheKey(courseId, assignmentId)]?.let { cachedDetail ->
       _uiState.value =
           _uiState.value.copy(
@@ -174,37 +192,38 @@ class JudgeViewModel(
       return
     }
 
-    viewModelScope.launch {
-      _uiState.value =
-          _uiState.value.copy(
-              isDetailLoading = true,
-              assignmentDetail = null,
-              detailError = null,
-          )
+    detailJob =
+        viewModelScope.launch {
+          _uiState.value =
+              _uiState.value.copy(
+                  isDetailLoading = true,
+                  assignmentDetail = null,
+                  detailError = null,
+              )
 
-      judgeApi
-          .getAssignmentDetail(courseId, assignmentId)
-          .onSuccess { detail ->
-            assignmentDetailCache[detailCacheKey(detail.courseId, detail.assignmentId)] = detail
-            _uiState.value =
-                _uiState.value.copy(
-                    isDetailLoading = false,
-                    assignmentDetail = detail,
-                    detailError = null,
-                )
-          }
-          .onFailure { exception ->
-            _uiState.value =
-                _uiState.value.copy(
-                    isDetailLoading = false,
-                    assignmentDetail = null,
-                    detailError = exception.message ?: "加载作业详情失败",
-                )
-          }
-    }
+          requestResult { judgeApi.getAssignmentDetail(courseId, assignmentId) }
+              .onSuccess { detail ->
+                assignmentDetailCache[detailCacheKey(detail.courseId, detail.assignmentId)] = detail
+                _uiState.value =
+                    _uiState.value.copy(
+                        isDetailLoading = false,
+                        assignmentDetail = detail,
+                        detailError = null,
+                    )
+              }
+              .onFailure { exception ->
+                _uiState.value =
+                    _uiState.value.copy(
+                        isDetailLoading = false,
+                        assignmentDetail = null,
+                        detailError = exception.message ?: "加载作业详情失败",
+                    )
+              }
+        }
   }
 
   fun clearAssignmentDetail() {
+    detailJob?.cancel()
     _uiState.value =
         _uiState.value.copy(
             isDetailLoading = false,
@@ -239,7 +258,9 @@ class JudgeViewModel(
     assignmentDetailEnrichmentJob =
         viewModelScope.launch {
           try {
-            summariesToEnrich.enrichDetailsInBatches(loadVersion)
+            withTimeoutOrNull(JUDGE_ASSIGNMENTS_TIMEOUT_MILLIS) {
+              summariesToEnrich.enrichDetailsInBatches(loadVersion)
+            }
           } finally {
             // 无论成功、失败还是被新一次加载取消，都要结束「补全中」状态。
             if (loadVersion == assignmentLoadVersion) {
@@ -269,24 +290,23 @@ class JudgeViewModel(
             .distinct()
     for (chunk in keys.chunked(JUDGE_DETAIL_ENRICHMENT_BATCH_SIZE)) {
       if (loadVersion != assignmentLoadVersion) return
-      val batchResult = judgeApi.getAssignmentDetails(chunk)
+      val batchResult = requestResult { judgeApi.getAssignmentDetails(chunk) }
+      if (loadVersion != assignmentLoadVersion) return
       val details = batchResult.getOrNull()?.details.orEmpty()
       details.forEach { detail ->
         assignmentDetailCache[detailCacheKey(detail.courseId, detail.assignmentId)] = detail
         applyEnrichedAssignmentDetail(detail, loadVersion)
       }
       val loadedKeys = details.map { detailCacheKey(it.courseId, it.assignmentId) }.toSet()
+      // 批量接口不可达时停止补全，避免再串行发送一整批必然失败的请求。
+      if (batchResult.isFailure) return
       val missingKeys =
-          if (batchResult.isFailure) {
-            chunk
-          } else {
-            chunk.filter { key -> detailCacheKey(key.courseId, key.assignmentId) !in loadedKeys }
-          }
+          chunk.filter { key -> detailCacheKey(key.courseId, key.assignmentId) !in loadedKeys }
       missingKeys.forEach { key ->
         if (loadVersion != assignmentLoadVersion) return
         val detail =
-            judgeApi.getAssignmentDetail(key.courseId, key.assignmentId).getOrNull()
-                ?: return@forEach
+            requestResult { judgeApi.getAssignmentDetail(key.courseId, key.assignmentId) }
+                .getOrNull() ?: return@forEach
         assignmentDetailCache[detailCacheKey(detail.courseId, detail.assignmentId)] = detail
         applyEnrichedAssignmentDetail(detail, loadVersion)
       }
@@ -421,5 +441,28 @@ class JudgeViewModel(
 
     /** 摘要阶段超时上限，避免首页待办区因为网络问题无限期停在加载状态。 */
     private const val JUDGE_ASSIGNMENTS_TIMEOUT_MILLIS = 45_000L
+  }
+}
+
+/** 中转服务不可用时给出可执行的恢复方式，避免把后端故障笼统显示为希冀超时。 */
+internal fun judgeAssignmentsTimeoutMessage(): String =
+    if (ConnectionRuntime.currentMode() == ConnectionMode.SERVER_RELAY) {
+      "中转服务器请求超时，请在设置中切换为直连模式或 WebVPN 模式后重试"
+    } else {
+      "希冀作业同步超时，请下拉刷新或稍后重试"
+    }
+
+internal fun judgeAssignmentsErrorMessage(error: Throwable): String {
+  val message = error.message ?: "加载希冀作业失败"
+  val relayUnavailable =
+      (error as? ApiCallException)?.status?.value in listOf(408, 502, 503, 504) ||
+          message.contains("超时") ||
+          message.contains("网关") ||
+          message.contains("服务器暂时不可用") ||
+          message.contains("502")
+  return if (ConnectionRuntime.currentMode() == ConnectionMode.SERVER_RELAY && relayUnavailable) {
+    "中转服务器暂时不可用，请在设置中切换为直连模式或 WebVPN 模式后重试"
+  } else {
+    message
   }
 }

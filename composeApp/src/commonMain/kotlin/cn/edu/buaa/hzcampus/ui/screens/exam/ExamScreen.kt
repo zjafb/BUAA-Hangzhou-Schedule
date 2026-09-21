@@ -39,7 +39,11 @@ fun ExamScreen(viewModel: ExamViewModel) {
       }
       uiState.error != null -> {
         Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-          Text(text = "加载失败: ${uiState.error}", color = MaterialTheme.colorScheme.error)
+          Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text = "加载失败: ${uiState.error}", color = MaterialTheme.colorScheme.error)
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = { viewModel.ensureLoaded(forceRefresh = true) }) { Text("重试") }
+          }
         }
       }
       uiState.examData != null -> {
@@ -48,6 +52,7 @@ fun ExamScreen(viewModel: ExamViewModel) {
             notArranged = uiState.examData!!.notArranged,
         )
       }
+      else -> Text("暂无考试安排", modifier = Modifier.align(Alignment.Center))
     }
   }
 }

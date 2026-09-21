@@ -123,6 +123,13 @@ data class BuaaScoreCourse(
 data class BuaaScoreTerm(val year: String, val semester: Int)
 
 fun parseBuaaScoreTermCode(termCode: String): BuaaScoreTerm {
+  // GSMIS 使用学年起始年份加学期序号，例如 20261、20262；
+  // 成绩平台仍要求 year=2026-2027、xq=1/2。
+  val compact = Regex("""^(\d{4})([123])$""").matchEntire(termCode.trim())
+  if (compact != null) {
+    val year = compact.groupValues[1].toInt()
+    return BuaaScoreTerm("$year-${year + 1}", compact.groupValues[2].toInt())
+  }
   val match =
       Regex("""^(\d{4}-\d{4})-(\d+)$""").matchEntire(termCode.trim())
           ?: throw IllegalArgumentException("Unsupported term code: $termCode")
