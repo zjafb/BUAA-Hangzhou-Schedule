@@ -1,102 +1,80 @@
 # 北航杭州课表
 
-![Kotlin](https://img.shields.io/badge/Kotlin-blue.svg?style=flat&logo=kotlin)
-![Compose](https://img.shields.io/badge/Jetpack_Compose-blueviolet.svg?style=flat&logo=jetpack-compose)
-![Ktor](https://img.shields.io/badge/Ktor-orange.svg?style=flat&logo=ktor)
-![Platform](https://img.shields.io/badge/Platform-Android-green.svg?style=flat&logo=android)
-![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat)
+面向北京航空航天大学杭州国际校园的 Android 校园助手，基于 [BUAASubnet/UBAA](https://github.com/BUAASubnet/UBAA)（MIT）改造。
 
-面向 **北京航空航天大学杭州国际校园** 学生的 **Android** 校园助手，把课表、考试、成绩、空教室、作业、邮件等常用服务集中到一个客户端中。基于 **Kotlin**、**Jetpack Compose** 与 **Ktor** 构建，**仅支持 Android**。
+支持课表及日历导出、课程与成绩查询、考试安排、空教室、希冀作业、北航邮件、今日计划、校园指南和自动评教等功能。
 
-## 基于什么
+## 最新更新
 
-本项目 fork 自 [BUAASubnet/UBAA](https://github.com/BUAASubnet/UBAA)（MIT 协议开源），在其基础上做了杭州国际校园的专门适配，并且**只保留 Android 客户端**（移除了原项目的 iOS / 桌面 / Web 目标）：
+v1.0.4
 
-- 保留并改造：课表、考试、成绩、空教室、希冀作业等通用能力；
-- 移除北京校区专属功能：博雅选课、图书馆座位、课程签到、研讨室预约、SPOC 作业、阳光打卡；
-- 新增杭州特色能力：钉钉「空间预约」入口、北航邮箱查询、今日计划与课程/计划提醒。
+- 设置：课前提醒时间移到最前；邮件数量 10、15、20、30 与“自定义”同排。
+- 提醒：课程与今日计划共用全屏设置，息屏或锁屏时请求亮屏全屏提示，使用手机时显示横幅；增加权限提示和测试按钮。
+- 邮件：新邮件优先，打开邮件即时更新未读红点；支持默认加载数量及继续查看历史邮件。
+- 课表：自定义日程按实际起止时间占用格子，不再占满整个节次。
+- 成绩：突出 GPA 与加权平均分，移除算术平均分展示，改善学期兼容与失败重试。
+- 稳定性：优化请求取消、并发、会话隔离和缓存；统一普通与高级功能卡片尺寸。
+- 移除实验性实时通知和流体云选项。
+- 文档修正：应用更新日志仅展示最新一次更新，使用说明与 README 同步生成。
 
-## 功能
+提醒需要系统允许通知、横幅、全屏通知和后台运行；后台限制可能导致离开应用后提醒延迟。
 
-**普通功能**
+[下载最新版](https://github.com/zjafb/BUAA-Hangzhou-Schedule/releases/latest) · [更新日志](docs/changelog/index.md)
 
-| 功能 | 说明 |
-| --- | --- |
-| 课表查询 | 学期 / 周次 / 周课表 / 今日课程，固定 14 节、按杭州校区标准作息（08:00–22:15）显示；本地化后秒开；支持一键导出到系统日历（ICS） |
-| 考试查询 | 查看考试安排，支持学期切换；首页显示最近一场考试的倒计时 |
-| 成绩查询 | 查看课程成绩、学分与绩点；加权 GPA 统计、各学期 GPA 与分数分布图表、绩点模拟 |
-| 空教室查询 | 查询杭州校区空闲教室 |
-| 希冀作业 | 聚合 `judge.buaa.edu.cn` 编程作业、提交状态、得分与题目明细 |
-| 空间预约 | 一键跳转钉钉工作台「空间预约管理平台」（依赖钉钉环境） |
-| 邮件查询 | 仅支持北航内部邮箱（IMAP/SMTP），未读红点、一键已读、长按/详情删除 |
-| 校园指南 | 内置杭州校区（中法未来科技学院）学习生活自助指南，应用内浏览 |
+## 使用说明
 
-**首页能力**
+### 1. 登录与连接
 
-| 功能 | 说明 |
-| --- | --- |
-| 今日课程 | 展示当日课程、时间、地点与授课老师，右侧标注必修/选修，点击进入课程详情 |
-| 今日计划 | 自定义待办任务，按时间排序，可叠加到课表，支持提前提醒通知，长按可删除 |
-| 待办区 | 聚合希冀未完成作业提醒 |
-| 校历与节假日 | 显示当前第几周及日期范围，命中法定节假日 / 调休时给出标记 |
-| 消息入口 | 右上角一键查看未读邮件 |
+使用北航统一身份认证账号登录。设置中可选择直连、WebVPN 或服务器中转；切换模式后需重新登录。
 
-**高级功能**
+### 2. 课表与日历导出
 
-| 功能 | 说明 |
-| --- | --- |
-| 自动评教 | 一键完成学期末评教任务 |
+按学期和周次查询课表。「课表本地化」将整学期保存到手机，便于离线查看；教务调整后请重新本地化。通过「.ics导出」生成日历文件，再由手机上的日历应用导入。
 
-**提醒通知**：课程课前提醒（提前分钟数可调）与今日计划提醒共用设置。开启全屏提醒后，息屏或锁屏时请求亮屏全屏提示；使用手机时显示横幅。请在系统设置中允许通知、横幅、全屏通知和后台运行，后台限制可能延迟提醒。设置页提供权限提示与两类提醒的测试按钮。
+### 3. 课程与今日计划提醒
 
-**v1.0.4**：课前提醒时间前移，邮件数量预设与自定义同排；邮件按新到旧排列、支持分批加载，优化未读红点、成绩统计和自定义日程显示。完整说明见 [更新日志](docs/changelog/index.md)。
+设置页最上方调整课前提前时间，可选 10、15、20、30 分钟或自定义。
+「息屏 / 锁屏全屏提醒」适用于课程与今日计划。开启并获得系统授权后，息屏或锁屏时请求亮屏全屏提示，使用手机时仅显示横幅；关闭时使用普通通知。
+请在系统设置中允许通知、横幅、全屏通知及后台运行。只开启应用内开关并不足够；限制后台应用可能导致提醒延迟。可分别点击「10 秒后测试课程提醒」和「10 秒后测试今日计划」验证。
+强行停止应用后需重新打开；重启后需先解锁。
 
-## 技术栈
+### 4. 今日计划
 
-- **Kotlin + Jetpack Compose**：Android 原生界面
-- **Ktor**：网络请求与本地直连 / 服务器中转两种连接模式（纯本地使用无需部署服务端）
-- **Material Design 3**：支持浅色 / 深色主题
-- **russhwolf Settings + kotlinx.serialization**：轻量本地持久化
-- **Android Keystore**：登录凭据加密存储
-- **Jakarta Mail（Angus Mail）**：北航邮箱 IMAP/SMTP 收发
-- **AlarmManager + BroadcastReceiver**：课程 / 计划提醒
-- **biweekly**：课表导出为 ICS 日历文件
-- **Vico**：成绩分析图表（其余平台有自绘 Canvas 兜底）
+在首页「今日计划」点击 + 新建，点击编辑、长按删除。设置日期、起止时间、备注及提醒时间；计划按实际时间叠加显示在课表对应位置。
 
-## 构建
+### 5. 课程、成绩与考试
 
-环境要求：
+课程查询查看逐门课程明细；成绩查询提供 GPA、加权平均分、学期分析和绩点模拟。可切换学期，加载失败时重试。考试查询查看考试安排，首页显示最近考试倒计时。
 
-- JDK 21
-- Android SDK（compileSdk 36）
+### 6. 邮件查询
 
-Debug 构建：
+填写北航内部邮箱地址与密码，并确保网络能够访问学校邮箱服务。邮件按新到旧显示，打开邮件会更新未读红点。
+设置 → 邮件默认显示数量，可选 10、15、20、30 或自定义 1–500 封。到列表底部点击查看更多历史邮件。支持长按、批量或详情页删除邮件。
 
-```bash
+### 7. 其他功能
+
+空教室查询按日期和节次查询杭州校区教室；希冀作业查看作业、提交状态和得分；校园指南提供学习生活信息；空间预约通过外部入口打开相关平台，可能需要钉钉环境或再次登录。
+自动评教入口位于高级功能，请核对适用学期和任务后使用。
+
+### 8. 在线服务异常
+
+学校系统维护、网络限制或登录过期可能导致查询失败。可检查连接模式、重新登录或稍后重试。应用内「关于」仅展示当前版本最新一次更新记录。
+
+## 开发与构建
+
+使用 JDK 21、Android SDK 36。项目核心采用 Kotlin、Compose、Ktor；shared 提供数据与接口，composeApp 提供界面，androidApp 为 Android 入口。
+
+```shell
 ./gradlew :androidApp:assembleDebug
-```
-
-产物位于 `androidApp/build/outputs/apk/debug/androidApp-debug.apk`。
-
-Release 构建需要先配置签名（`local.properties`）：
-
-```properties
-SIGNING_KEY=<keystore 相对项目根目录的路径>
-SIGNING_STORE_PASSWORD=<store 口令>
-SIGNING_KEY_ALIAS=<alias>
-SIGNING_KEY_PASSWORD=<key 口令>
-```
-
-```bash
 ./gradlew :androidApp:assembleRelease
 ```
 
-## 下载安装
+正式版签名通过未提交的 local.properties 或环境变量配置 SIGNING_KEY、SIGNING_STORE_PASSWORD、SIGNING_KEY_ALIAS、SIGNING_KEY_PASSWORD。不要提交密码或签名文件。
 
-Release 版 APK 见 [Releases](../../releases)（或直接安装本仓库构建产物）。安装时需允许「安装未知来源应用」。
+版本号由 gradle.properties 管理。每次更新先维护 docs/content/latest-release.txt 和 docs/content/usage-guide.txt，再运行 ./gradlew syncUserDocs。README 的结构在 docs/content/README.template.md 维护。
+
+所有客户端编译都会先同步文档：自动生成应用内说明、README、docs/changelog/index.md 和 docs/features/usage-guide.md。日志首行必须与版本号一致，且只能包含一个版本；版本不匹配会阻止构建。更新内容仍需依据实际改动编写，构建不会凭空生成新功能说明。
 
 ## 许可证
 
-本项目基于 MIT 协议开源。
-
-Copyright (c) 2026 BUAASubnet
+MIT。Copyright (c) 2026 BUAASubnet。保留上游许可证与署名。

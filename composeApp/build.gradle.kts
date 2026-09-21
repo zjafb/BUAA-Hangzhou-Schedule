@@ -47,6 +47,7 @@ kotlin {
   }
 
   sourceSets {
+    commonMain { kotlin.srcDir(rootProject.layout.buildDirectory.dir("generated/userDocs/kotlin")) }
     androidMain.dependencies {
       implementation("org.jetbrains.compose.ui:ui-tooling-preview:$composeVersion")
       implementation(libs.androidx.activity.compose)
@@ -95,6 +96,10 @@ kotlin {
       implementation("org.jetbrains.compose.ui:ui-test-junit4:$composeVersion")
     }
   }
+}
+
+tasks.configureEach {
+  if (name.startsWith("compile")) dependsOn(rootProject.tasks.named("syncUserDocs"))
 }
 
 compose.desktop {

@@ -1,3 +1,4 @@
+import cn.edu.buaa.hzcampus.gradle.SyncUserDocsTask
 import cn.edu.buaa.hzcampus.gradle.UploadLatestReleaseToBhpanTask
 import cn.edu.buaa.hzcampus.gradle.VerifyBhpanReadOnlyTask
 
@@ -53,4 +54,15 @@ tasks.register<UploadLatestReleaseToBhpanTask>("uploadLatestReleaseToBhpan") {
 
 tasks.register<VerifyBhpanReadOnlyTask>("verifyBhpanReadOnly") {
   localPropertiesFile.convention(layout.projectDirectory.file("local.properties"))
+}
+
+tasks.register<SyncUserDocsTask>("syncUserDocs") {
+  appVersion.set(providers.gradleProperty("project.version"))
+  releaseSource.set(layout.projectDirectory.file("docs/content/latest-release.txt"))
+  guideSource.set(layout.projectDirectory.file("docs/content/usage-guide.txt"))
+  readmeTemplate.set(layout.projectDirectory.file("docs/content/README.template.md"))
+  kotlinOutput.set(layout.buildDirectory.dir("generated/userDocs/kotlin"))
+  readmeOutput.set(layout.projectDirectory.file("README.md"))
+  changelogOutput.set(layout.projectDirectory.file("docs/changelog/index.md"))
+  guideOutput.set(layout.projectDirectory.file("docs/features/usage-guide.md"))
 }
