@@ -666,7 +666,7 @@ private fun MainAppContent(
                   onMailClick = { navigateTo(AppScreen.MAIL) },
                   onCampusGuideClick = openCampusGuide,
               )
-          AppScreen.IHOME -> IhomeScreen(ihomeViewModel)
+          AppScreen.IHOME -> IhomeScreen(ihomeViewModel, connectionMode)
           AppScreen.ADVANCED ->
               AdvancedFeaturesScreen(
                   onIhomeClick = { navigateTo(AppScreen.IHOME) },

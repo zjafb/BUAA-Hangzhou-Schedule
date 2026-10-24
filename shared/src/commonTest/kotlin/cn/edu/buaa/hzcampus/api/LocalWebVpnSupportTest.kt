@@ -1,5 +1,6 @@
 package cn.edu.buaa.hzcampus.api
 
+import cn.edu.buaa.hzcampus.api.feature.ihomeWebsiteUrl
 import cn.edu.buaa.hzcampus.api.local.LocalWebVpnSupport
 import cn.edu.buaa.hzcampus.api.local.localUpstreamUrl
 import com.russhwolf.settings.MapSettings
@@ -13,6 +14,21 @@ class LocalWebVpnSupportTest {
   fun setup() {
     ConnectionModeStore.settings = MapSettings()
     ConnectionRuntime.clearSelectedMode()
+  }
+
+  @Test
+  fun `iHome官网入口遵循连接模式且不传递应用会话`() {
+    val direct = "https://i.buaa.edu.cn/web/"
+    assertEquals(direct, ihomeWebsiteUrl(ConnectionMode.DIRECT))
+    assertEquals(direct, ihomeWebsiteUrl(null))
+    val vpn = ihomeWebsiteUrl(ConnectionMode.WEBVPN)
+    assertEquals(
+        "https://d.buaa.edu.cn/https/77726476706e69737468656265737421f9b94389263126557a1dc7af96/web/",
+        vpn,
+    )
+    assertEquals(direct, LocalWebVpnSupport.fromWebVpnUrl(vpn))
+    assertEquals("", io.ktor.http.Url(vpn).encodedQuery)
+    assertEquals("", io.ktor.http.Url(vpn).fragment)
   }
 
   @Test

@@ -1,12 +1,20 @@
 package cn.edu.buaa.hzcampus.api.feature
 
+import cn.edu.buaa.hzcampus.api.ConnectionMode
 import cn.edu.buaa.hzcampus.api.ConnectionRuntime
 import cn.edu.buaa.hzcampus.api.auth.ApiClientProvider
 import cn.edu.buaa.hzcampus.api.auth.safeApiCall
 import cn.edu.buaa.hzcampus.api.core.ApiClient
+import cn.edu.buaa.hzcampus.api.local.LocalWebVpnSupport
 import cn.edu.buaa.hzcampus.model.dto.*
 import io.ktor.client.request.*
 import io.ktor.http.*
+
+/** 从官网入口开始，让外部浏览器自行完成登录；不携带应用令牌、票据或 Cookie。 */
+fun ihomeWebsiteUrl(mode: ConnectionMode? = ConnectionRuntime.currentMode()): String {
+  val entry = "https://i.buaa.edu.cn/web/"
+  return if (mode == ConnectionMode.WEBVPN) LocalWebVpnSupport.toWebVpnUrl(entry) else entry
+}
 
 interface IhomeApiBackend {
   suspend fun getPage(query: IhomeQuery): Result<IhomePage>

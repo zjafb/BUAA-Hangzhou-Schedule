@@ -3,12 +3,16 @@ package cn.edu.buaa.hzcampus.ui.screens.ihome
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toAwtImage
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
+import cn.edu.buaa.hzcampus.api.ConnectionMode
 import cn.edu.buaa.hzcampus.api.feature.IhomeApi
 import cn.edu.buaa.hzcampus.model.dto.*
 import java.io.File
@@ -19,6 +23,44 @@ import org.junit.Test
 
 class IhomeScreenTest {
   @get:Rule val compose = createComposeRule()
+
+  @Test
+  fun `WebVPN模式用户须知按钮打开网关官网而非直连`() {
+    var opened = ""
+    val api =
+        object : IhomeApi() {
+          override suspend fun getConfig() = Result.success(IhomeConfig())
+
+          override suspend fun getPage(query: IhomeQuery): Result<IhomePage> =
+              Result.failure(
+                  cn.edu.buaa.hzcampus.api.auth.ApiCallException(
+                      "请确认协议",
+                      code = "ihome_agreement_required",
+                  )
+              )
+        }
+    val vm = IhomeViewModel(api)
+    compose.setContent {
+      CompositionLocalProvider(
+          LocalUriHandler provides
+              object : UriHandler {
+                override fun openUri(uri: String) {
+                  opened = uri
+                }
+              }
+      ) {
+        MaterialTheme {
+          Box(Modifier.size(390.dp, 720.dp)) { IhomeScreen(vm, ConnectionMode.WEBVPN) }
+        }
+      }
+    }
+    compose.waitUntil(5000) { vm.uiState.value.agreementRequired }
+    compose.onNodeWithText("前往学校官网阅读用户须知").performClick()
+    assertEquals(
+        "https://d.buaa.edu.cn/https/77726476706e69737468656265737421f9b94389263126557a1dc7af96/web/",
+        opened,
+    )
+  }
 
   @Test
   fun `首次协议未确认显示官网入口`() {

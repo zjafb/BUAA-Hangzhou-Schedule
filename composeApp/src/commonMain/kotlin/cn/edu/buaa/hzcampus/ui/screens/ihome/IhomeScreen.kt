@@ -25,11 +25,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import cn.edu.buaa.hzcampus.api.ConnectionMode
+import cn.edu.buaa.hzcampus.api.ConnectionRuntime
+import cn.edu.buaa.hzcampus.api.feature.ihomeWebsiteUrl
 import cn.edu.buaa.hzcampus.model.dto.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun IhomeScreen(viewModel: IhomeViewModel) {
+fun IhomeScreen(
+    viewModel: IhomeViewModel,
+    connectionMode: ConnectionMode? = ConnectionRuntime.currentMode(),
+) {
   val state by viewModel.uiState.collectAsState()
   val uriHandler = LocalUriHandler.current
   var draft by remember(state.query.keyword) { mutableStateOf(state.query.keyword) }
@@ -80,10 +86,13 @@ fun IhomeScreen(viewModel: IhomeViewModel) {
       if (state.agreementRequired) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
           Text(
-              "请先在学校 iHome 官网阅读并确认用户须知。完成后返回，点击右上角刷新。",
+              "请先在学校 iHome 官网使用同一账号登录，阅读并自行确认用户须知。完成后返回，点击右上角刷新。",
               style = MaterialTheme.typography.bodyMedium,
           )
-          TextButton(onClick = { uriHandler.openUri("https://i.buaa.edu.cn/web/#/agreement") }) {
+          if (connectionMode == ConnectionMode.WEBVPN) {
+            Text("官网将通过 WebVPN 打开，浏览器中可能需要重新登录。", style = MaterialTheme.typography.bodySmall)
+          }
+          TextButton(onClick = { uriHandler.openUri(ihomeWebsiteUrl(connectionMode)) }) {
             Text("前往学校官网阅读用户须知")
           }
         }
