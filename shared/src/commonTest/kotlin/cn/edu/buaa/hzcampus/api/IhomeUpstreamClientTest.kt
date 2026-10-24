@@ -24,6 +24,44 @@ class IhomeUpstreamClientTest {
   private val jsonHeaders = headersOf(HttpHeaders.ContentType, "application/json")
 
   @Test
+  fun `用户协议414明确提示且不会自动同意或重试认证`() = runTest {
+    for ((body, expected) in
+        listOf(
+            "\"协议检测未通过\"" to "ihome_agreement_required",
+            "\"URI Too Long\"" to "ihome_upstream",
+        )) {
+      val requests = mutableListOf<HttpRequestData>()
+      val base =
+          HttpClient(
+              MockEngine { request ->
+                requests += request
+                if (request.url.host == "sso.buaa.edu.cn")
+                    respond(
+                        "",
+                        HttpStatusCode.Found,
+                        headersOf(
+                            HttpHeaders.Location,
+                            "https://i.buaa.edu.cn/web/#/login?type=0&token=fixture-token",
+                        ),
+                    )
+                else respond(body, HttpStatusCode(414, "URI Too Long"), jsonHeaders)
+              }
+          )
+      val client = IhomeUpstreamClient(base)
+      try {
+        val error = assertFailsWith<IhomeException> { client.getDetail(42) }
+        assertEquals(expected, error.code)
+        assertEquals(2, requests.size)
+        assertTrue(requests.all { it.method == HttpMethod.Get })
+        assertTrue(requests.none { it.url.encodedPath.contains("user_agree") })
+      } finally {
+        client.close()
+        base.close()
+      }
+    }
+  }
+
+  @Test
   fun `真实WebVPN编码的CAS回调可提取片段令牌而不循环加载web页面`() = runTest {
     val requests = mutableListOf<HttpRequestData>()
     var callbacks = 0

@@ -2,6 +2,7 @@ package cn.edu.buaa.hzcampus.ui.screens.ihome
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cn.edu.buaa.hzcampus.api.auth.ApiCallException
 import cn.edu.buaa.hzcampus.api.feature.IhomeApi
 import cn.edu.buaa.hzcampus.model.dto.*
 import kotlinx.coroutines.Job
@@ -24,9 +25,11 @@ data class IhomeUiState(
     val notices: List<IhomeNotice> = emptyList(),
     val config: IhomeConfig = IhomeConfig(),
     val configError: String? = null,
+    val configErrorCode: String? = null,
     val loading: Boolean = false,
     val hasMore: Boolean = false,
     val error: String? = null,
+    val errorCode: String? = null,
     val selectedId: Long? = null,
     val detailMine: Boolean = false,
     val detail: IhomeAppeal? = null,
@@ -35,7 +38,10 @@ data class IhomeUiState(
     val detailError: String? = null,
     val busy: Set<Long> = emptySet(),
     val uncertain: Set<Long> = emptySet(),
-)
+) {
+  val agreementRequired: Boolean
+    get() = errorCode == "ihome_agreement_required" || configErrorCode == "ihome_agreement_required"
+}
 
 class IhomeViewModel(private val api: IhomeApi = IhomeApi()) : ViewModel() {
   private val state = MutableStateFlow(IhomeUiState())
@@ -70,8 +76,19 @@ class IhomeViewModel(private val api: IhomeApi = IhomeApi()) : ViewModel() {
       val result = api.getConfig()
       if (currentEpoch != epoch) return@launch
       result
-          .onSuccess { state.value = state.value.copy(config = it, configError = null) }
-          .onFailure { state.value = state.value.copy(configError = "平台设置加载失败") }
+          .onSuccess {
+            state.value = state.value.copy(config = it, configError = null, configErrorCode = null)
+          }
+          .onFailure {
+            state.value =
+                state.value.copy(
+                    configError =
+                        if ((it as? ApiCallException)?.code == "ihome_agreement_required")
+                            it.message
+                        else "平台设置加载失败",
+                    configErrorCode = (it as? ApiCallException)?.code,
+                )
+          }
     }
   }
 
@@ -126,7 +143,7 @@ class IhomeViewModel(private val api: IhomeApi = IhomeApi()) : ViewModel() {
     val currentEpoch = epoch
     val initial = state.value
     val query = initial.query.copy(page = if (append) initial.query.page + 1 else 1)
-    state.value = initial.copy(loading = true, error = null)
+    state.value = initial.copy(loading = true, error = null, errorCode = null)
     listJob =
         viewModelScope.launch {
           if (initial.view == IhomeView.NOTICES) {
@@ -134,10 +151,21 @@ class IhomeViewModel(private val api: IhomeApi = IhomeApi()) : ViewModel() {
             if (currentEpoch != epoch || version != listVersion) return@launch
             result
                 .onSuccess {
-                  state.value = state.value.copy(notices = it, loading = false, hasMore = false)
+                  state.value =
+                      state.value.copy(
+                          notices = it,
+                          loading = false,
+                          hasMore = false,
+                          errorCode = null,
+                      )
                 }
                 .onFailure {
-                  state.value = state.value.copy(loading = false, error = it.message ?: "公告加载失败")
+                  state.value =
+                      state.value.copy(
+                          loading = false,
+                          error = it.message ?: "公告加载失败",
+                          errorCode = (it as? ApiCallException)?.code,
+                      )
                 }
           } else {
             val result = api.getPage(query)
@@ -151,6 +179,7 @@ class IhomeViewModel(private val api: IhomeApi = IhomeApi()) : ViewModel() {
                   state.value =
                       state.value.copy(
                           entries = old + added,
+                          errorCode = null,
                           query = query.copy(page = page.page),
                           loading = false,
                           hasMore =
@@ -160,7 +189,12 @@ class IhomeViewModel(private val api: IhomeApi = IhomeApi()) : ViewModel() {
                       )
                 }
                 .onFailure {
-                  state.value = state.value.copy(loading = false, error = it.message ?: "诉求加载失败")
+                  state.value =
+                      state.value.copy(
+                          loading = false,
+                          error = it.message ?: "诉求加载失败",
+                          errorCode = (it as? ApiCallException)?.code,
+                      )
                 }
           }
         }

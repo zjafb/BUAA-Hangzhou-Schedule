@@ -9,7 +9,10 @@ import io.ktor.http.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /** 基于既有 CAS 会话的协议实现，直连、WebVPN 和中转共享解析与写操作语义。 */
 class IhomeUpstreamClient(
@@ -154,6 +157,16 @@ class IhomeUpstreamClient(
               .buildString()
       val response =
           client.get(route(url)) { header(HttpHeaders.Authorization, "Bearer $credential") }
+      if (response.status.value == 414) {
+        val message =
+            runCatching {
+                  (Json.parseToJsonElement(response.bodyAsText()) as? JsonPrimitive)?.contentOrNull
+                }
+                .getOrNull()
+        if (message == "协议检测未通过") {
+          throw IhomeException("ihome_agreement_required", "请先在学校 iHome 官网阅读并确认用户须知，再返回刷新")
+        }
+      }
       if (response.status.value == 401 && attempt == 0) {
         if (token == credential) token = null
       } else {

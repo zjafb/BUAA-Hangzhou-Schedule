@@ -18,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -30,6 +31,7 @@ import cn.edu.buaa.hzcampus.model.dto.*
 @Composable
 fun IhomeScreen(viewModel: IhomeViewModel) {
   val state by viewModel.uiState.collectAsState()
+  val uriHandler = LocalUriHandler.current
   var draft by remember(state.query.keyword) { mutableStateOf(state.query.keyword) }
   val listState = rememberLazyListState()
   LaunchedEffect(Unit) { viewModel.ensureLoaded() }
@@ -75,8 +77,20 @@ fun IhomeScreen(viewModel: IhomeViewModel) {
         }
       }
       if (state.view in listOf(IhomeView.PUBLIC, IhomeView.MINE)) IhomeFilters(state, viewModel)
-      state.configError?.let { ErrorRow(it, viewModel::loadConfig) }
-      state.error?.let { ErrorRow(it, viewModel::refresh) }
+      if (state.agreementRequired) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+          Text(
+              "请先在学校 iHome 官网阅读并确认用户须知。完成后返回，点击右上角刷新。",
+              style = MaterialTheme.typography.bodyMedium,
+          )
+          TextButton(onClick = { uriHandler.openUri("https://i.buaa.edu.cn/web/#/agreement") }) {
+            Text("前往学校官网阅读用户须知")
+          }
+        }
+      } else {
+        state.configError?.let { ErrorRow(it, viewModel::loadConfig) }
+        state.error?.let { ErrorRow(it, viewModel::refresh) }
+      }
       if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
       LazyColumn(
           state = listState,

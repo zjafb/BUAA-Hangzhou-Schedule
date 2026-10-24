@@ -15,6 +15,32 @@ class IhomeViewModelTest {
   }
 
   @Test
+  fun `协议提示在官网确认后刷新恢复且不提交同意`() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val api = FakeIhomeApi()
+    api.page = {
+      Result.failure(
+          cn.edu.buaa.hzcampus.api.auth.ApiCallException(
+              "请先确认用户须知",
+              code = "ihome_agreement_required",
+          )
+      )
+    }
+    val vm = IhomeViewModel(api)
+    vm.ensureLoaded()
+    advanceUntilIdle()
+    assertTrue(vm.uiState.value.agreementRequired)
+    assertFalse(vm.uiState.value.loading)
+    assertEquals(0, api.writes)
+    api.page = { Result.success(IhomePage(listOf(IhomeEntry(appeal(1))), 1, 1, 1)) }
+    vm.refresh()
+    advanceUntilIdle()
+    assertFalse(vm.uiState.value.agreementRequired)
+    assertNull(vm.uiState.value.error)
+    assertEquals(1, vm.uiState.value.entries.size)
+  }
+
+  @Test
   fun `重复页停止加载且不会重复追加`() = runTest {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
     val api = FakeIhomeApi()

@@ -20,6 +20,27 @@ import org.junit.Test
 class IhomeScreenTest {
   @get:Rule val compose = createComposeRule()
 
+  @Test
+  fun `首次协议未确认显示官网入口`() {
+    val api =
+        object : IhomeApi() {
+          override suspend fun getConfig() = Result.success(IhomeConfig())
+
+          override suspend fun getPage(query: IhomeQuery): Result<IhomePage> =
+              Result.failure(
+                  cn.edu.buaa.hzcampus.api.auth.ApiCallException(
+                      "请确认协议",
+                      code = "ihome_agreement_required",
+                  )
+              )
+        }
+    val vm = IhomeViewModel(api)
+    compose.setContent { MaterialTheme { Box(Modifier.size(390.dp, 720.dp)) { IhomeScreen(vm) } } }
+    compose.waitUntil(5000) { vm.uiState.value.agreementRequired }
+    compose.onNodeWithText("前往学校官网阅读用户须知").assertIsDisplayed()
+    compose.onNodeWithText("ihome 暂时不可用，请稍后重试").assertDoesNotExist()
+  }
+
   @Test fun `窄屏可搜索并打开详情`() = checkScreen(390, 720, "phone")
 
   @Test fun `宽屏可搜索并打开详情`() = checkScreen(1024, 720, "desktop")
