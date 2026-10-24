@@ -1,44 +1,22 @@
 # 博雅课程
 
-博雅课程模块覆盖课程发现、筛选、详情、已选课程、统计、选课、退课和签到签退。它是读写混合模块，所有写操作都需要明确的服务端或本地上游返回结果。
+入口：**普通功能 → 博雅课程**。移植自 BUAASubnet/UBAA v1.8.2（上游 main 提交 155e8b56），使用杭州版现有账号和连接模式。
 
-## 用户能力
+## 使用
 
-- 查看个人博雅资料和修读统计。
-- 分页浏览课程，支持状态、类别、校区等筛选。
-- 查看课程详情和已选课程。
-- 选择课程、退选课程。
-- 对支持签到的博雅课程执行签到或签退。
+- **选择课程**：分页浏览课程，按状态、类别、校区筛选；筛选设置按账号保存。详情展示选课时段、人数、适用范围及课程说明，符合平台状态时可选课或退选。
+- **我的课程**：查看已选课程及学校返回的考核、签到状态；原版签到/签退按钮按平台配置和时间窗口显示。
+- **课程统计**：查看累计有效次数、分类要求和完成情况。
 
-## 技术路径
+直连访问失败时，请在设置中切换 WebVPN 后重新登录。博雅系统的账号资格、校区范围、课程开放时间与名额以学校上游结果为准，不代表所有杭州校区账号均有选课权限。课程时段固定按 Asia/Shanghai 判断。
 
-- UI 分为首页、课程列表、课程详情、已选课程和统计页。
-- `BykcApiBackend` 定义所有业务动作，relay 模式通过 Ktor 路由访问服务端。
-- `LocalBykcApiBackend` 实现直连/WebVPN 模式，包含上游登录、加密请求、分页、签到配置和动作解析。
-- `BykcService` 在服务端缓存上游客户端上下文，并在应用停止或定期清理时释放缓存。
+选课、退选和签到请求异常时不会自动重复提交；请先刷新详情和我的课程核对结果，再决定下一步操作。应用不会在进入页面或刷新时自动报名。
 
-## 接口
+## 实现
 
-- `GET /api/v1/bykc/profile`
-- `GET /api/v1/bykc/courses`
-- `GET /api/v1/bykc/courses/{courseId}`
-- `GET /api/v1/bykc/courses/chosen`
-- `GET /api/v1/bykc/statistics`
-- `POST /api/v1/bykc/courses/{courseId}/select`
-- `DELETE /api/v1/bykc/courses/{courseId}/select`
-- `POST /api/v1/bykc/courses/{courseId}/sign`
+- shared 的 BykcApi、LocalBykcApi、LocalBykcCrypto、DTO 及平台加密实现负责协议与直连/WebVPN 请求。
+- composeApp 的 bykc 目录包含首页、列表、详情、已选课程、统计、筛选及时间显示。
+- MainAppScreen 负责导航、按账号及连接模式隔离 ViewModel，并按页面需要加载数据。
+- 本仓库只发布客户端，不部署上游的服务器中转模块。
 
-## 来源文件
-
-- `composeApp/src/commonMain/kotlin/cn/edu/ubaa/ui/screens/bykc/BykcHomeScreen.kt`
-- `composeApp/src/commonMain/kotlin/cn/edu/ubaa/ui/screens/bykc/BykcCoursesScreen.kt`
-- `composeApp/src/commonMain/kotlin/cn/edu/ubaa/ui/screens/bykc/BykcViewModel.kt`
-- `shared/src/commonMain/kotlin/cn/edu/ubaa/api/feature/BykcApi.kt`
-- `shared/src/commonMain/kotlin/cn/edu/ubaa/api/local/LocalBykcApi.kt`
-- `shared/src/commonMain/kotlin/cn/edu/ubaa/model/dto/Bykc.kt`
-- `server/src/main/kotlin/cn/edu/ubaa/bykc/BykcRoutes.kt`
-- `server/src/main/kotlin/cn/edu/ubaa/bykc/BykcService.kt`
-- `server/src/main/kotlin/cn/edu/ubaa/bykc/BykcCrypto.kt`
-- `composeApp/src/commonTest/kotlin/cn/edu/ubaa/ui/screens/bykc/BykcCourseFiltersTest.kt`
-- `server/src/test/kotlin/cn/edu/ubaa/bykc/BykcRoutesTest.kt`
-- `shared/src/commonTest/kotlin/cn/edu/ubaa/api/LocalBykcApiBackendTest.kt`
+自动验证包括加密与解析、登录跳转、直连/WebVPN 路由、课程筛选、列表与详情、选课/退选/签到的模拟响应，以及写请求丢失响应时不重放。真实报名、退选及签到未作为发布测试执行。

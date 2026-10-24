@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Grade
 import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.MeetingRoom
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,10 +38,12 @@ fun RegularFeaturesScreen(
     onSpaceReservationClick: () -> Unit,
     onMailClick: () -> Unit,
     onCampusGuideClick: () -> Unit,
+    onBykcClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
   val features =
       listOf(
+          FeatureItem("bykc", "博雅课程", "浏览筛选、选课退选、已选课程与修读统计", Icons.Default.School),
           FeatureItem(
               id = "schedule",
               title = "课表查询",
@@ -97,6 +100,7 @@ fun RegularFeaturesScreen(
           feature = feature,
           onClick = {
             when (feature.id) {
+              "bykc" -> onBykcClick()
               "schedule" -> onScheduleClick()
               "exam" -> onExamClick()
               "grade" -> onCourseQueryClick()

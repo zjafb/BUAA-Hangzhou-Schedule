@@ -6,11 +6,13 @@ import cn.edu.buaa.hzcampus.api.auth.AuthServiceBackend
 import cn.edu.buaa.hzcampus.api.auth.RelayAuthServiceBackend
 import cn.edu.buaa.hzcampus.api.auth.RelayUserServiceBackend
 import cn.edu.buaa.hzcampus.api.auth.UserServiceBackend
+import cn.edu.buaa.hzcampus.api.feature.BykcApiBackend
 import cn.edu.buaa.hzcampus.api.feature.ClassroomApiBackend
 import cn.edu.buaa.hzcampus.api.feature.EvaluationServiceBackend
 import cn.edu.buaa.hzcampus.api.feature.GradeApiBackend
 import cn.edu.buaa.hzcampus.api.feature.IhomeApiBackend
 import cn.edu.buaa.hzcampus.api.feature.JudgeApiBackend
+import cn.edu.buaa.hzcampus.api.feature.RelayBykcApiBackend
 import cn.edu.buaa.hzcampus.api.feature.RelayClassroomApiBackend
 import cn.edu.buaa.hzcampus.api.feature.RelayEvaluationServiceBackend
 import cn.edu.buaa.hzcampus.api.feature.RelayGradeApiBackend
@@ -19,6 +21,7 @@ import cn.edu.buaa.hzcampus.api.feature.RelayJudgeApiBackend
 import cn.edu.buaa.hzcampus.api.feature.RelayScheduleApiBackend
 import cn.edu.buaa.hzcampus.api.feature.ScheduleApiBackend
 import cn.edu.buaa.hzcampus.api.local.LocalAuthServiceBackend
+import cn.edu.buaa.hzcampus.api.local.LocalBykcApiBackend
 import cn.edu.buaa.hzcampus.api.local.LocalClassroomApiBackend
 import cn.edu.buaa.hzcampus.api.local.LocalEvaluationServiceBackend
 import cn.edu.buaa.hzcampus.api.local.LocalGradeApiBackend
@@ -28,6 +31,8 @@ import cn.edu.buaa.hzcampus.api.local.LocalScheduleApiBackend
 import cn.edu.buaa.hzcampus.api.local.LocalUserServiceBackend
 
 interface ApiFactory {
+  fun bykcApi(): BykcApiBackend
+
   fun ihomeApi(): IhomeApiBackend = RelayIhomeApiBackend()
 
   fun authService(): AuthServiceBackend
@@ -51,6 +56,12 @@ internal object DefaultApiFactory : ApiFactory {
 
   private fun mode(): ConnectionMode =
       ConnectionRuntime.currentMode() ?: ConnectionMode.SERVER_RELAY
+
+  override fun bykcApi(): BykcApiBackend =
+      when (mode()) {
+        ConnectionMode.SERVER_RELAY -> RelayBykcApiBackend()
+        else -> localBackends(mode()).bykcApi
+      }
 
   override fun ihomeApi(): IhomeApiBackend =
       when (mode()) {
@@ -120,6 +131,7 @@ internal object DefaultApiFactory : ApiFactory {
       }
 
   private class LocalBackendSet {
+    val bykcApi = LocalBykcApiBackend()
     val ihomeApi = LocalIhomeApiBackend()
     val authService = LocalAuthServiceBackend()
     val userService = LocalUserServiceBackend()
@@ -130,6 +142,7 @@ internal object DefaultApiFactory : ApiFactory {
     val judgeApi = LocalJudgeApiBackend()
 
     fun clearCache() {
+      bykcApi.clearCache()
       ihomeApi.clearCache()
       classroomApi.clearCache()
       evaluationService.clearCache()
@@ -139,6 +152,8 @@ internal object DefaultApiFactory : ApiFactory {
 }
 
 internal object RelayApiFactory : ApiFactory {
+  override fun bykcApi(): BykcApiBackend = RelayBykcApiBackend()
+
   override fun ihomeApi(): IhomeApiBackend = RelayIhomeApiBackend()
 
   override fun authService(): AuthServiceBackend = RelayAuthServiceBackend()

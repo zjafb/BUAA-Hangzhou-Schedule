@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Tune
@@ -16,10 +17,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cn.edu.buaa.hzcampus.api.ConnectionMode
+import cn.edu.buaa.hzcampus.api.storage.BykcCourseFilterStore
 import cn.edu.buaa.hzcampus.api.storage.CourseAttributeStore
 import cn.edu.buaa.hzcampus.api.storage.MailAccountsStore
 import cn.edu.buaa.hzcampus.api.storage.PlanStore
 import cn.edu.buaa.hzcampus.api.storage.ReminderStore
+import cn.edu.buaa.hzcampus.model.dto.BykcCourseDto
 import cn.edu.buaa.hzcampus.model.dto.CourseClass
 import cn.edu.buaa.hzcampus.model.dto.PlanTask
 import cn.edu.buaa.hzcampus.model.dto.TodayClass
@@ -39,6 +42,7 @@ import cn.edu.buaa.hzcampus.ui.common.util.rememberOpenDingTalkSpaceReservation
 import cn.edu.buaa.hzcampus.ui.common.util.requestResult
 import cn.edu.buaa.hzcampus.ui.common.util.schedulePlanReminders
 import cn.edu.buaa.hzcampus.ui.common.util.scheduleUpcomingClassReminders
+import cn.edu.buaa.hzcampus.ui.screens.bykc.*
 import cn.edu.buaa.hzcampus.ui.screens.classroom.ClassroomQueryScreen
 import cn.edu.buaa.hzcampus.ui.screens.classroom.ClassroomViewModel
 import cn.edu.buaa.hzcampus.ui.screens.evaluation.EvaluationScreen
@@ -79,6 +83,11 @@ import kotlinx.datetime.toLocalDateTime
 
 /** 应用程序所有的屏幕页面定义。 */
 enum class AppScreen {
+  BYKC_HOME,
+  BYKC_COURSES,
+  BYKC_DETAIL,
+  BYKC_CHOSEN,
+  BYKC_STATISTICS,
   IHOME,
   HOME,
   REGULAR,
@@ -237,6 +246,30 @@ private fun MainAppContent(
   // 初始化各模块 ViewModel
   val ihomeViewModel: IhomeViewModel =
       viewModel(key = "ihome-${userData.schoolid}") { IhomeViewModel() }
+  val bykcViewModel: BykcViewModel =
+      viewModel(key = "bykc-${userData.schoolid}") { BykcViewModel() }
+  val bykcCoursesState by bykcViewModel.coursesState.collectAsState()
+  val bykcDetailState by bykcViewModel.courseDetailState.collectAsState()
+  val bykcChosenState by bykcViewModel.chosenCoursesState.collectAsState()
+  var selectedBykcCourseId by remember { mutableStateOf<Long?>(null) }
+  var selectedBykcCourseSnapshot by remember { mutableStateOf<BykcCourseDto?>(null) }
+  val bykcCoursesListState = rememberLazyListState()
+  val bykcFilterUserKey = userData.schoolid
+  val defaultBykcFilters = remember { defaultBykcCourseFilters() }
+  var bykcCourseFilters by
+      remember(bykcFilterUserKey) {
+        mutableStateOf(
+            BykcCourseFilterStore.get(bykcFilterUserKey)?.toBykcCourseFilters()
+                ?: defaultBykcFilters
+        )
+      }
+  fun updateBykcCourseFilters(newFilters: BykcCourseFilters) {
+    val shouldReload = bykcCourseFilters.requiresAllCourses() != newFilters.requiresAllCourses()
+    bykcCourseFilters = newFilters
+    if (newFilters == defaultBykcFilters) BykcCourseFilterStore.clear(bykcFilterUserKey)
+    else BykcCourseFilterStore.save(bykcFilterUserKey, newFilters.toStored())
+    if (shouldReload) bykcViewModel.loadCourses(includeExpired = newFilters.requiresAllCourses())
+  }
   val scheduleViewModel: ScheduleViewModel = viewModel { ScheduleViewModel() }
   val scheduleUiState by scheduleViewModel.uiState.collectAsState()
   val todayScheduleState by scheduleViewModel.todayScheduleState.collectAsState()
@@ -379,6 +412,11 @@ private fun MainAppContent(
             ?: when (screen) {
               AppScreen.HOME -> BottomNavTab.HOME
               AppScreen.REGULAR,
+              AppScreen.BYKC_HOME,
+              AppScreen.BYKC_COURSES,
+              AppScreen.BYKC_DETAIL,
+              AppScreen.BYKC_CHOSEN,
+              AppScreen.BYKC_STATISTICS,
               AppScreen.SCHEDULE,
               AppScreen.EXAM,
               AppScreen.COURSE_QUERY,
@@ -405,6 +443,11 @@ private fun MainAppContent(
           when (top) {
             AppScreen.HOME -> BottomNavTab.HOME
             AppScreen.REGULAR,
+            AppScreen.BYKC_HOME,
+            AppScreen.BYKC_COURSES,
+            AppScreen.BYKC_DETAIL,
+            AppScreen.BYKC_CHOSEN,
+            AppScreen.BYKC_STATISTICS,
             AppScreen.SCHEDULE,
             AppScreen.EXAM,
             AppScreen.COURSE_QUERY,
@@ -510,6 +553,12 @@ private fun MainAppContent(
       homeBootstrapCoordinator.cancel()
     }
     when (currentScreen) {
+      AppScreen.BYKC_COURSES -> {
+        bykcViewModel.ensureProfileLoaded()
+        bykcViewModel.ensureCoursesLoaded(includeExpired = bykcCourseFilters.requiresAllCourses())
+      }
+      AppScreen.BYKC_CHOSEN -> bykcViewModel.ensureChosenCoursesLoaded()
+      AppScreen.BYKC_STATISTICS -> bykcViewModel.ensureStatisticsLoaded()
       AppScreen.IHOME -> ihomeViewModel.ensureLoaded()
       AppScreen.HOME -> startHomeBootstrap()
       AppScreen.SCHEDULE -> scheduleViewModel.ensureScheduleLoaded()
@@ -525,6 +574,11 @@ private fun MainAppContent(
 
   val screenTitle =
       when (currentScreen) {
+        AppScreen.BYKC_HOME -> "博雅课程"
+        AppScreen.BYKC_COURSES -> "选择课程"
+        AppScreen.BYKC_DETAIL -> "博雅课程详情"
+        AppScreen.BYKC_CHOSEN -> "我的博雅课程"
+        AppScreen.BYKC_STATISTICS -> "博雅课程统计"
         AppScreen.IHOME -> "iHome"
         AppScreen.HOME -> "首页"
         AppScreen.REGULAR -> "普通功能"
@@ -665,6 +719,83 @@ private fun MainAppContent(
                   onSpaceReservationClick = openDingTalkSpaceReservation,
                   onMailClick = { navigateTo(AppScreen.MAIL) },
                   onCampusGuideClick = openCampusGuide,
+                  onBykcClick = { navigateTo(AppScreen.BYKC_HOME) },
+              )
+          AppScreen.BYKC_HOME ->
+              BykcHomeScreen(
+                  onSelectCourseClick = { navigateTo(AppScreen.BYKC_COURSES) },
+                  onMyCoursesClick = { navigateTo(AppScreen.BYKC_CHOSEN) },
+                  onStatisticsClick = {
+                    bykcViewModel.ensureStatisticsLoaded()
+                    navigateTo(AppScreen.BYKC_STATISTICS)
+                  },
+              )
+          AppScreen.BYKC_STATISTICS -> BykcStatisticsScreen(viewModel = bykcViewModel)
+          AppScreen.BYKC_COURSES ->
+              BykcCoursesScreen(
+                  courses = bykcCoursesState.courses,
+                  isLoading = bykcCoursesState.isLoading,
+                  isLoadingMore = bykcCoursesState.isLoadingMore,
+                  hasMorePages = bykcCoursesState.hasMorePages,
+                  filters = bykcCourseFilters,
+                  error = bykcCoursesState.error,
+                  listState = bykcCoursesListState,
+                  onCourseClick = {
+                    selectedBykcCourseId = it.id
+                    selectedBykcCourseSnapshot = it
+                    bykcViewModel.loadCourseDetail(it.id)
+                    navigateTo(AppScreen.BYKC_DETAIL)
+                  },
+                  onFiltersChange = ::updateBykcCourseFilters,
+                  onRefresh = {
+                    bykcViewModel.loadCourses(
+                        includeExpired = bykcCourseFilters.requiresAllCourses()
+                    )
+                  },
+                  onLoadMore = {
+                    bykcViewModel.loadMoreCourses(
+                        includeExpired = bykcCourseFilters.requiresAllCourses()
+                    )
+                  },
+              )
+          AppScreen.BYKC_DETAIL ->
+              BykcCourseDetailScreen(
+                  course = bykcDetailState.course,
+                  listSnapshot = selectedBykcCourseSnapshot,
+                  isLoading = bykcDetailState.isLoading,
+                  error = bykcDetailState.error,
+                  operationInProgress = bykcDetailState.operationInProgress,
+                  operationMessage = bykcDetailState.operationMessage,
+                  onSelectClick = {
+                    selectedBykcCourseId?.let { bykcViewModel.selectCourse(it) { _, _ -> } }
+                  },
+                  onDeselectClick = {
+                    selectedBykcCourseId?.let { bykcViewModel.deselectCourse(it) { _, _ -> } }
+                  },
+                  onSignInClick = {
+                    selectedBykcCourseId?.let {
+                      bykcViewModel.signCourse(it, null, null, 1) { _, _ -> }
+                    }
+                  },
+                  onSignOutClick = {
+                    selectedBykcCourseId?.let {
+                      bykcViewModel.signCourse(it, null, null, 2) { _, _ -> }
+                    }
+                  },
+                  onClearMessage = { bykcViewModel.clearOperationMessage() },
+              )
+          AppScreen.BYKC_CHOSEN ->
+              BykcChosenCoursesScreen(
+                  courses = bykcChosenState.courses,
+                  isLoading = bykcChosenState.isLoading,
+                  error = bykcChosenState.error,
+                  onCourseClick = {
+                    selectedBykcCourseId = it.courseId
+                    selectedBykcCourseSnapshot = null
+                    bykcViewModel.loadCourseDetail(it.courseId)
+                    navigateTo(AppScreen.BYKC_DETAIL)
+                  },
+                  onRefresh = { bykcViewModel.loadChosenCourses() },
               )
           AppScreen.IHOME -> IhomeScreen(ihomeViewModel, connectionMode)
           AppScreen.ADVANCED ->
@@ -760,6 +891,11 @@ private fun MainAppContent(
       if (
           currentScreen !in
               listOf(
+                  AppScreen.BYKC_HOME,
+                  AppScreen.BYKC_COURSES,
+                  AppScreen.BYKC_DETAIL,
+                  AppScreen.BYKC_CHOSEN,
+                  AppScreen.BYKC_STATISTICS,
                   AppScreen.SCHEDULE,
                   AppScreen.EXAM,
                   AppScreen.GRADE,
