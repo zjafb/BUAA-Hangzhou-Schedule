@@ -50,6 +50,8 @@ import cn.edu.buaa.hzcampus.ui.screens.grade.GradeScoreWatchViewModel
 import cn.edu.buaa.hzcampus.ui.screens.grade.GradeScreen
 import cn.edu.buaa.hzcampus.ui.screens.grade.GradeUiState
 import cn.edu.buaa.hzcampus.ui.screens.grade.GradeViewModel
+import cn.edu.buaa.hzcampus.ui.screens.ihome.IhomeScreen
+import cn.edu.buaa.hzcampus.ui.screens.ihome.IhomeViewModel
 import cn.edu.buaa.hzcampus.ui.screens.judge.JudgeAssignmentDetailScreen
 import cn.edu.buaa.hzcampus.ui.screens.judge.JudgeAssignmentsScreen
 import cn.edu.buaa.hzcampus.ui.screens.judge.JudgeSortField
@@ -77,6 +79,7 @@ import kotlinx.datetime.toLocalDateTime
 
 /** 应用程序所有的屏幕页面定义。 */
 enum class AppScreen {
+  IHOME,
   HOME,
   REGULAR,
   ADVANCED,
@@ -232,10 +235,12 @@ private fun MainAppContent(
         }
       }
   // 初始化各模块 ViewModel
+  val ihomeViewModel: IhomeViewModel =
+      viewModel(key = "ihome-${userData.schoolid}") { IhomeViewModel() }
   val scheduleViewModel: ScheduleViewModel = viewModel { ScheduleViewModel() }
   val scheduleUiState by scheduleViewModel.uiState.collectAsState()
   val todayScheduleState by scheduleViewModel.todayScheduleState.collectAsState()
-  LaunchedEffect(todayScheduleState.todayClasses, reminderAdvanceMinutes) {
+  LaunchedEffect(todayScheduleState.todayClasses, reminderAdvanceMinutes, homeNow.date) {
     // 一次排满未来一周（读本地课表，不联网），本地课表不可用时退回今天的在线课表。
     runCatching {
       scheduleUpcomingClassReminders(
@@ -382,6 +387,7 @@ private fun MainAppContent(
               AppScreen.MAIL,
               AppScreen.JUDGE_ASSIGNMENTS,
               AppScreen.JUDGE_ASSIGNMENT_DETAIL -> BottomNavTab.REGULAR
+              AppScreen.IHOME,
               AppScreen.ADVANCED,
               AppScreen.GRADE,
               AppScreen.EVALUATION -> BottomNavTab.ADVANCED
@@ -407,6 +413,7 @@ private fun MainAppContent(
             AppScreen.MAIL,
             AppScreen.JUDGE_ASSIGNMENTS,
             AppScreen.JUDGE_ASSIGNMENT_DETAIL -> BottomNavTab.REGULAR
+            AppScreen.IHOME,
             AppScreen.ADVANCED,
             AppScreen.GRADE,
             AppScreen.EVALUATION -> BottomNavTab.ADVANCED
@@ -503,6 +510,7 @@ private fun MainAppContent(
       homeBootstrapCoordinator.cancel()
     }
     when (currentScreen) {
+      AppScreen.IHOME -> ihomeViewModel.ensureLoaded()
       AppScreen.HOME -> startHomeBootstrap()
       AppScreen.SCHEDULE -> scheduleViewModel.ensureScheduleLoaded()
       AppScreen.EXAM -> examViewModel.ensureLoaded()
@@ -517,6 +525,7 @@ private fun MainAppContent(
 
   val screenTitle =
       when (currentScreen) {
+        AppScreen.IHOME -> "iHome"
         AppScreen.HOME -> "首页"
         AppScreen.REGULAR -> "普通功能"
         AppScreen.ADVANCED -> "高级功能"
@@ -657,8 +666,10 @@ private fun MainAppContent(
                   onMailClick = { navigateTo(AppScreen.MAIL) },
                   onCampusGuideClick = openCampusGuide,
               )
+          AppScreen.IHOME -> IhomeScreen(ihomeViewModel)
           AppScreen.ADVANCED ->
               AdvancedFeaturesScreen(
+                  onIhomeClick = { navigateTo(AppScreen.IHOME) },
                   onGradeClick = { navigateTo(AppScreen.GRADE) },
                   onEvaluationClick = { navigateTo(AppScreen.EVALUATION) },
               )

@@ -8,10 +8,12 @@ plugins {
 }
 
 android {
+  testBuildType = "release"
   namespace = "cn.edu.buaa.hzcampus.android"
   compileSdk = libs.versions.android.compileSdk.get().toInt()
 
   defaultConfig {
+    testInstrumentationRunner = "cn.edu.buaa.hzcampus.ReminderInstrumentation"
     applicationId = "cn.edu.buaa.hzcampus"
     minSdk = libs.versions.android.minSdk.get().toInt()
     targetSdk = libs.versions.android.targetSdk.get().toInt()
@@ -71,6 +73,7 @@ android {
 kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_21) } }
 
 dependencies {
+  androidTestImplementation(projects.shared)
   implementation(projects.composeApp)
   implementation(libs.androidx.activity.compose)
   implementation(compose.preview)

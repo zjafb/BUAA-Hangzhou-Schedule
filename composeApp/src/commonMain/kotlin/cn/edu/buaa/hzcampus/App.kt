@@ -54,7 +54,6 @@ import kotlinx.coroutines.launch
 fun App() {
   // 预加载应用所需的中文字体
   PreloadFonts()
-
   HzCampusTheme {
     val authViewModel: AuthViewModel = viewModel { AuthViewModel() }
     val uiState by authViewModel.uiState.collectAsState()
@@ -65,21 +64,17 @@ fun App() {
     // 启动判定结果：null 表示尚未完成解析，此时必须停留在 Splash。
     var startupDecision by remember { mutableStateOf<StartupDecision?>(null) }
     var showOfflineSchedule by remember { mutableStateOf(false) }
-
     // 启动流程控制状态
     var isSplashFinished by remember { mutableStateOf(false) }
-
     // 更新检测逻辑
     val updateService = remember { UpdateService() }
     val announcementService = remember { AnnouncementService() }
     var updateInfo by remember { mutableStateOf<AppVersionCheckResponse?>(null) }
     var announcementInfo by remember { mutableStateOf<AppAnnouncement?>(null) }
     val uriHandler = LocalUriHandler.current
-
     suspend fun checkStartupPrompts() {
       // 北航杭州版不接入 UBAA 服务器的版本检查与公告，避免误报 UBAA 版本(1.8.0)和公告。
     }
-
     suspend fun bootstrapForMode(mode: ConnectionMode) {
       selectedConnectionMode = mode
       launchStartupTasks(
@@ -88,7 +83,6 @@ fun App() {
           checkStartupPrompts = ::checkStartupPrompts,
       )
     }
-
     LaunchedEffect(Unit) {
       val mode = ConnectionRuntime.resolveSelectedMode()
       selectedConnectionMode = mode
@@ -105,7 +99,6 @@ fun App() {
       mode?.let { bootstrapForMode(it) }
       startupDecision = StartupDecision(mode = mode, authRestoreExpected = restoreExpected)
     }
-
     // 前台恢复时验证会话有效性
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner, uiState.isLoggedIn) {
@@ -129,7 +122,6 @@ fun App() {
         lifecycleOwner.lifecycle.removeObserver(observer)
       }
     }
-
     // 根据认证状态与启动判定决定何时隐藏 Splash 界面。
     //
     // 三种结果分别怎么走（仅在"存在可自动恢复的登录"时才会等待）：
@@ -160,10 +152,8 @@ fun App() {
                   !authBusy &&
                   !uiState.isLoggedIn &&
                   uiState.error == null)
-
       if (shouldEndSplash) isSplashFinished = true
     }
-
     // 安全网：认证流程因任何异常原因始终没有给出确定结果时，也不会永久卡在 Splash。
     // 取值明显大于认证客户端的超时（连接 8s / 请求 15s），正常流程不会走到这里。
     LaunchedEffect(startupDecision) {
@@ -172,7 +162,6 @@ fun App() {
       delay(SPLASH_RESTORE_TIMEOUT_MS)
       if (!isSplashFinished) isSplashFinished = true
     }
-
     // 版本更新对话框
     if (updateInfo != null) {
       val release = updateInfo!!
@@ -186,7 +175,6 @@ fun App() {
         append("\n\n")
         append(releaseNotes)
       }
-
       AlertDialog(
           onDismissRequest = { updateInfo = null },
           title = { Text("发现新版本") },
@@ -208,7 +196,6 @@ fun App() {
           dismissButton = { TextButton(onClick = { updateInfo = null }) { Text("稍后再说") } },
       )
     }
-
     if (shouldShowAnnouncementDialog(updateInfo, announcementInfo)) {
       val announcement = announcementInfo!!
       AlertDialog(
@@ -235,7 +222,6 @@ fun App() {
           },
       )
     }
-
     // 视图切换状态机
     when {
       startupDecision == null -> SplashScreen(modifier = Modifier.fillMaxSize())
@@ -254,7 +240,7 @@ fun App() {
         MainAppScreen(
             userData = userData,
             userInfo = uiState.userInfo,
-            connectionMode = selectedConnectionMode ?: ConnectionMode.SERVER_RELAY,
+            connectionMode = requireNotNull(selectedConnectionMode),
             availableConnectionModes = availableConnectionModes,
             onEnsureUserInfo = { authViewModel.ensureUserInfoLoaded() },
             onConnectionModeSelected = { mode ->
@@ -269,7 +255,7 @@ fun App() {
       else -> {
         LoginScreen(
             loginFormState = loginForm,
-            currentConnectionMode = selectedConnectionMode ?: ConnectionMode.SERVER_RELAY,
+            currentConnectionMode = requireNotNull(selectedConnectionMode),
             availableConnectionModes = availableConnectionModes,
             onUsernameChange = { authViewModel.updateUsername(it) },
             onPasswordChange = { authViewModel.updatePassword(it) },
@@ -294,7 +280,6 @@ fun App() {
         )
       }
     }
-
     // 错误消息自动淡出
     LaunchedEffect(uiState.error) {
       if (uiState.error != null) {

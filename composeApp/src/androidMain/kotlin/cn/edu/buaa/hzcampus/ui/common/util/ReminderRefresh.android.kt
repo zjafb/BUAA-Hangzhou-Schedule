@@ -26,7 +26,7 @@ internal fun rescheduleAllReminders() {
   val advance = ReminderStore.getAdvanceMinutes()
   val upcoming =
       runCatching { repository.upcomingClasses(CLASS_REMINDER_DAYS).getOrNull() }.getOrNull()
-  if (!upcoming.isNullOrEmpty()) {
+  if (upcoming != null) {
     scheduleClassReminders(upcoming, advance)
   } else {
     // 本地课表不可用（尚未本地化 / 缓存损坏）：退回「今天」的课表，取不到就只清掉旧闹钟。

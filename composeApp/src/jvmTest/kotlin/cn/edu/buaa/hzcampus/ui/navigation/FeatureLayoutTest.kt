@@ -24,7 +24,7 @@ class FeatureLayoutTest {
     compose.setContent {
       MaterialTheme {
         Box(Modifier.size(360.dp, 700.dp)) {
-          if (advanced) AdvancedFeaturesScreen({}, {})
+          if (advanced) AdvancedFeaturesScreen({}, {}, {})
           else RegularFeaturesScreen({}, {}, {}, {}, {}, {}, {}, {})
         }
       }

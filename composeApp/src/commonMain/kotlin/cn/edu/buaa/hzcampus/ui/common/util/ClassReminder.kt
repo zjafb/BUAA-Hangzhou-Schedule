@@ -27,12 +27,20 @@ fun scheduleUpcomingClassReminders(
   val upcoming =
       runCatching { ScheduleRepository().upcomingClasses(CLASS_REMINDER_DAYS).getOrNull() }
           .getOrNull()
-  if (!upcoming.isNullOrEmpty()) {
+  if (upcoming != null) {
     scheduleClassReminders(upcoming, advanceMinutes)
     return
   }
+  if (fallbackTodayClasses.isEmpty()) return
   scheduleClassReminders(
       fallbackTodayClasses.map { DatedClass(fallbackTodayDate, it) },
       advanceMinutes,
   )
+}
+
+/** 设置保存时立即重排，不依赖返回首页。课表尚未本地化时保留现有在线排程。 */
+fun scheduleSavedClassReminders(advanceMinutes: Int) {
+  ScheduleRepository().upcomingClasses(CLASS_REMINDER_DAYS).onSuccess {
+    scheduleClassReminders(it, advanceMinutes)
+  }
 }

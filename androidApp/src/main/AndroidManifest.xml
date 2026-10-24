@@ -57,6 +57,9 @@
         <receiver android:name="cn.edu.buaa.hzcampus.ui.common.util.BootReminderReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
                 <!-- 覆盖安装（APK 升级）同样会清掉本应用的闹钟，这里一并重排，用户不必先打开一次 App。 -->
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>

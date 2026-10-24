@@ -26,11 +26,9 @@ class AuthViewModel(
 ) : ViewModel() {
   private var userInfoLoadedOnce = false
   private var userInfoLoading = false
-
   private val _uiState = MutableStateFlow(AuthUiState())
   /** 整体认证状态流。 */
   val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
-
   private val _loginForm = MutableStateFlow(LoginFormState())
   /** 登录表单输入状态流。 */
   val loginForm: StateFlow<LoginFormState> = _loginForm.asStateFlow()
@@ -161,7 +159,6 @@ class AuthViewModel(
       markStartupAuthResolved()
       return
     }
-
     viewModelScope.launch {
       _uiState.value = _uiState.value.copy(isLoading = true, error = null)
       val captcha = if (state.captchaRequired) form.captcha else null
@@ -214,6 +211,8 @@ class AuthViewModel(
   /** 应用全局初始化入口。 用于检查本地 Token 是否有效，若失效则根据设置决定跳转登录页或尝试自动登录。 */
   fun initializeApp() {
     if (ConnectionRuntime.currentMode() == null) return
+    // 模式迁移可能关闭自动登录；同步表单，避免启动页仍等待旧的自动登录状态。
+    loadSavedCredentials()
     viewModelScope.launch {
       val restoredAccessToken = AuthTokensStore.get()?.accessToken?.takeIf { it.isNotBlank() }
       if (!authService.hasPersistedSession()) {
@@ -221,7 +220,6 @@ class AuthViewModel(
         if (CredentialStore.isAutoLogin()) login() else preloadLoginState()
         return@launch
       }
-
       authService.applyStoredTokens()
       _uiState.value = _uiState.value.copy(isLoading = true)
       authService

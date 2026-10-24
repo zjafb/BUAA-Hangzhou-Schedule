@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AssignmentTurnedIn
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +19,7 @@ internal typealias AdvancedFeatureItem = FeatureItem
 
 internal fun advancedFeatureItems(): List<AdvancedFeatureItem> =
     listOf(
+        AdvancedFeatureItem("ihome", "iHome", "校园诉求、回复与关注", Icons.Default.Forum),
         AdvancedFeatureItem(
             id = "grade",
             title = "成绩查询",
@@ -34,6 +36,7 @@ internal fun advancedFeatureItems(): List<AdvancedFeatureItem> =
 
 @Composable
 fun AdvancedFeaturesScreen(
+    onIhomeClick: () -> Unit,
     onGradeClick: () -> Unit,
     onEvaluationClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -46,6 +49,7 @@ fun AdvancedFeaturesScreen(
           feature = feature,
           onClick = {
             when (feature.id) {
+              "ihome" -> onIhomeClick()
               "grade" -> onGradeClick()
               "evaluation" -> onEvaluationClick()
             }

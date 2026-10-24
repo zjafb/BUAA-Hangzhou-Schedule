@@ -92,6 +92,7 @@ fun SettingsScreen(
               customEditing = false
               advanceMinutes = minutes
               ReminderStore.setAdvanceMinutes(minutes)
+              cn.edu.buaa.hzcampus.ui.common.util.scheduleSavedClassReminders(minutes)
             },
             label = { Text("$minutes") },
         )
@@ -115,6 +116,7 @@ fun SettingsScreen(
                 ?.let {
                   advanceMinutes = it
                   ReminderStore.setAdvanceMinutes(it)
+                  cn.edu.buaa.hzcampus.ui.common.util.scheduleSavedClassReminders(it)
                 }
           },
           label = { Text("自定义提前分钟数") },

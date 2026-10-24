@@ -10,6 +10,7 @@ import cn.edu.buaa.hzcampus.api.auth.CaptchaRequiredClientException
 import cn.edu.buaa.hzcampus.api.auth.LoginStatsReporter
 import cn.edu.buaa.hzcampus.api.auth.SessionStatusResponse
 import cn.edu.buaa.hzcampus.api.auth.UserServiceBackend
+import cn.edu.buaa.hzcampus.api.auth.secureCasTransportUrl
 import cn.edu.buaa.hzcampus.api.auth.toUserFacingApiException
 import cn.edu.buaa.hzcampus.api.auth.userFacingMessageForCode
 import cn.edu.buaa.hzcampus.api.core.getDefaultEngine
@@ -246,7 +247,6 @@ internal object LocalUpstreamClientProvider {
       { followRedirects, cookieStorage ->
         buildLocalUpstreamClient(followRedirects = followRedirects, cookieStorage = cookieStorage)
       }
-
   private val sharedClient =
       ResettableSharedInstance(factory = { clientFactory(true) }, disposer = HttpClient::close)
 
@@ -322,18 +322,15 @@ internal suspend fun validateLocalConnectionSession(): LocalConnectionSessionVal
       LocalConnectionSessionValidationState.Invalid
     }
   }
-
   val body = response.bodyAsText()
   if (!body.trimStart().startsWith("{")) {
     return LocalConnectionSessionValidationState.Invalid
   }
-
   val payload = localConnectionAuthJson.decodeFromString<UserInfoResponse>(body)
   val user = payload.data ?: return LocalConnectionSessionValidationState.Invalid
   if (payload.code != 0) {
     return LocalConnectionSessionValidationState.Invalid
   }
-
   val session =
       LocalAuthSession(
           username = user.schoolid ?: user.username ?: "",
@@ -408,18 +405,15 @@ internal class LocalAuthServiceBackend : AuthServiceBackend {
               Result.success(LoginPreloadResponse(captchaRequired = false))
         }
       }
-
       if (response.status != HttpStatusCode.OK) {
         return Result.success(LoginPreloadResponse(captchaRequired = false))
       }
-
       val loginPageHtml = response.bodyAsText()
       cachedLoginPageHtml = loginPageHtml
       val execution = LocalCasParser.extractExecution(loginPageHtml).takeIf { it.isNotBlank() }
       val captchaInfo = LocalCasParser.detectCaptcha(loginPageHtml, captchaUrl())
       val hydratedCaptcha =
           captchaInfo?.let { info -> info.withBase64Image(fetchCaptchaImage(info.id)) }
-
       Result.success(
           LoginPreloadResponse(
               captchaRequired = hydratedCaptcha != null,
@@ -457,12 +451,10 @@ internal class LocalAuthServiceBackend : AuthServiceBackend {
           return Result.failure(ApiCallException("登录失败，请稍后重试"))
         }
       }
-
       if (loginPageHtml != null) {
         LocalCasParser.extractTipText(loginPageHtml)?.let { tip ->
           return Result.failure(ApiCallException(tip))
         }
-
         val actualExecution =
             execution?.takeIf { it.isNotBlank() } ?: LocalCasParser.extractExecution(loginPageHtml)
         val request =
@@ -482,7 +474,6 @@ internal class LocalAuthServiceBackend : AuthServiceBackend {
               )
           )
         }
-
         val parameters =
             if (captchaInfo != null || !captcha.isNullOrBlank()) {
               LocalCasParser.buildCaptchaLoginParameters(request, actualExecution)
@@ -494,7 +485,6 @@ internal class LocalAuthServiceBackend : AuthServiceBackend {
         followRedirectsAndCheckError(submitResponse, noRedirectClient)
         activateUcLogin()
       }
-
       when (val validation = validateLocalConnectionSession()) {
         is LocalConnectionSessionValidationState.Valid -> {
           reportLocalLoginSuccess(
@@ -552,7 +542,6 @@ internal class LocalAuthServiceBackend : AuthServiceBackend {
                     code = "unauthenticated",
                 )
             )
-
     return try {
       when (val validation = validateLocalConnectionSession()) {
         is LocalConnectionSessionValidationState.Valid -> {
@@ -614,7 +603,12 @@ internal class LocalAuthServiceBackend : AuthServiceBackend {
   }
 
   private suspend fun activateUcLogin() {
-    LocalUpstreamClientProvider.shared().get(localUcActivateUrl())
+    val client = LocalUpstreamClientProvider.newNoRedirectClient()
+    try {
+      followRedirectsAndCheckError(client.get(localUcActivateUrl()), client)
+    } finally {
+      client.close()
+    }
   }
 
   @OptIn(ExperimentalEncodingApi::class)
@@ -630,16 +624,22 @@ internal class LocalAuthServiceBackend : AuthServiceBackend {
   private suspend fun followRedirectsAndCheckError(
       initialResponse: HttpResponse,
       noRedirectClient: HttpClient,
+      useWebVpn: Boolean = ConnectionRuntime.currentMode() == ConnectionMode.WEBVPN,
   ) {
     var currentResponse = initialResponse
     var passwordExpiryIgnored = false
+    var redirectCount = 0
     while (true) {
       while (currentResponse.status.value in 300..399) {
         val location = currentResponse.headers[HttpHeaders.Location] ?: break
+        if (++redirectCount > 10) throw ApiCallException("统一认证跳转次数过多，请稍后重试")
+        val resolved = resolveRedirectUrl(currentResponse.call.request.url, location)
+        val secureUrl = secureCasTransportUrl(LocalWebVpnSupport.fromWebVpnUrl(resolved))
         currentResponse =
-            noRedirectClient.get(resolveRedirectUrl(currentResponse.call.request.url, location))
+            noRedirectClient.get(
+                if (useWebVpn) LocalWebVpnSupport.toWebVpnUrl(secureUrl) else secureUrl
+            )
       }
-
       val bodyText = runCatching { currentResponse.bodyAsText() }.getOrNull().orEmpty()
       if (LocalCasParser.isIgnorablePasswordExpiryPage(bodyText)) {
         if (passwordExpiryIgnored) {
@@ -658,7 +658,6 @@ internal class LocalAuthServiceBackend : AuthServiceBackend {
             }
         continue
       }
-
       val finalUrl = currentResponse.call.request.url.toString()
       if ("exception.message=" in finalUrl) {
         throw ApiCallException(finalUrl.substringAfter("exception.message=").substringBefore("&"))
@@ -679,7 +678,7 @@ internal class LocalAuthServiceBackend : AuthServiceBackend {
 
   private fun resolveRedirectUrl(currentUrl: Url, location: String): String {
     if (location.startsWith("http://") || location.startsWith("https://")) {
-      return localUpstreamUrl(location)
+      return location
     }
     if (location.startsWith("//")) {
       return "${currentUrl.protocol.name}:$location"
@@ -707,14 +706,15 @@ internal class LocalAuthServiceBackend : AuthServiceBackend {
       val loginPageResponse = directClient.get(directLoginUrl)
       if (loginPageResponse.status.value in 300..399) {
         // 已有直连会话，跟随重定向激活即可
-        followRedirectsAndCheckError(loginPageResponse, directClient)
-        directClient.get(
-            "https://uc.buaa.edu.cn/api/login?target=https%3A%2F%2Fuc.buaa.edu.cn%2F%23%2Fuser%2Flogin"
-        )
+        followRedirectsAndCheckError(loginPageResponse, directClient, useWebVpn = false)
+        val activation =
+            directClient.get(
+                "https://uc.buaa.edu.cn/api/login?target=https%3A%2F%2Fuc.buaa.edu.cn%2F%23%2Fuser%2Flogin"
+            )
+        followRedirectsAndCheckError(activation, directClient, useWebVpn = false)
         return
       }
       if (loginPageResponse.status != HttpStatusCode.OK) return
-
       val loginPageHtml = loginPageResponse.bodyAsText()
       val execution =
           LocalCasParser.extractExecution(loginPageHtml).takeIf { it.isNotBlank() } ?: return
@@ -722,10 +722,12 @@ internal class LocalAuthServiceBackend : AuthServiceBackend {
       val parameters = LocalCasParser.buildCasLoginParameters(loginPageHtml, request)
       val submitResponse =
           directClient.post(directLoginUrl) { setBody(FormDataContent(parameters)) }
-      followRedirectsAndCheckError(submitResponse, directClient)
-      directClient.get(
-          "https://uc.buaa.edu.cn/api/login?target=https%3A%2F%2Fuc.buaa.edu.cn%2F%23%2Fuser%2Flogin"
-      )
+      followRedirectsAndCheckError(submitResponse, directClient, useWebVpn = false)
+      val activation =
+          directClient.get(
+              "https://uc.buaa.edu.cn/api/login?target=https%3A%2F%2Fuc.buaa.edu.cn%2F%23%2Fuser%2Flogin"
+          )
+      followRedirectsAndCheckError(activation, directClient, useWebVpn = false)
     } catch (_: Exception) {
       // 直连 SSO 会话建立失败不影响主登录流程
     } finally {
@@ -769,7 +771,6 @@ internal class LocalUserServiceBackend : UserServiceBackend {
             )
         )
       }
-
       val payload = json.decodeFromString<UserInfoResponse>(body)
       val info = payload.data
       if (payload.code != 0 || info == null) {
@@ -785,7 +786,6 @@ internal class LocalUserServiceBackend : UserServiceBackend {
             )
         )
       }
-
       Result.success(info)
     } catch (e: Exception) {
       Result.failure(e.toUserFacingApiException("用户信息查询失败，请稍后重试"))
